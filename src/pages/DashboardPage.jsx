@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { dashboardStats, recentTasks, systemStatus, quickLinks } from '../mock/dashboard';
-import { initialRobots } from '../mock/robotStatus';
+import { useStore } from '../store';
+import { quickLinks, systemStatus } from '../mock/dashboard';
+import { RobotStatusEnum } from '../mock/robotStatus';
 
 const statusColor = {
   '进行中': 'text-blue-600',
   '已完成': 'text-green-600',
   '异常': 'text-red-600',
+  '待执行': 'text-gray-600',
 };
 
 function StatCard({ label, value, icon, color }) {
@@ -32,16 +33,23 @@ function Progress({ value, color }) {
 }
 
 export default function DashboardPage({ onNavigate }) {
-  const robots = initialRobots;
-  const onlineCount = robots.filter(r => r.status === 'RUNNING' || r.status === 'IDLE').length;
-  const errorCount = robots.filter(r => r.status === 'ERROR').length;
+  const { tasks, robots, devices, computedStats } = useStore();
 
   const stats = {
-    todayTasks: dashboardStats.todayTasks,
-    onlineRobots: onlineCount,
-    errorDevices: errorCount,
-    urgentTasks: dashboardStats.urgentTasks,
+    todayTasks: tasks.length,
+    onlineRobots: computedStats.onlineRobots,
+    errorDevices: computedStats.errorDevices,
+    urgentTasks: computedStats.urgentTasks,
   };
+
+  // Recent tasks from actual task data
+  const recentTasks = tasks.slice(0, 5).map(t => ({
+    id: t.taskId,
+    name: `${t.startLocation}→${t.endLocation} ${t.taskType}`,
+    robot: t.assignedRobot || '未分配',
+    status: t.status === 'IN_PROGRESS' ? '进行中' : t.status === 'COMPLETED' ? '已完成' : t.status === 'ERROR' ? '异常' : '待执行',
+    time: t.updateTime?.split(' ')[1] || t.createTime?.split(' ')[1] || '-',
+  }));
 
   return (
     <div className="space-y-6">

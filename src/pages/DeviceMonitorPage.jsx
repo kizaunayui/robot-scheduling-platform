@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { initialDevices, DeviceStatusEnum, DeviceAreaEnum } from '../mock/deviceMonitor';
+import { useStore } from '../store';
+import { DeviceStatusEnum, DeviceAreaEnum } from '../mock/deviceMonitor';
 
 const statusColors = {
   WORKING: 'bg-green-100 text-green-800',
@@ -9,7 +10,7 @@ const statusColors = {
 };
 
 export default function DeviceMonitorPage() {
-  const [devices] = useState(initialDevices);
+  const { devices } = useStore();
   const [filters, setFilters] = useState({ deviceId: '', deviceName: '', status: '', area: '' });
   const [page, setPage] = useState(1);
   const pageSize = 5;

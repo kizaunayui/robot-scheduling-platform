@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { StoreProvider } from './store';
 import Sidebar from './components/Sidebar';
 import DashboardPage from './pages/DashboardPage';
 import RobotStatusPage from './pages/RobotStatusPage';
@@ -29,16 +30,18 @@ export default function App() {
   const PageComponent = pages[currentPage].component;
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} pages={pages} />
-      <main className="flex-1 overflow-auto p-6">
-        <h1 className="text-2xl font-bold mb-4">{pages[currentPage].title}</h1>
-        {currentPage === 'dashboard' ? (
-          <PageComponent onNavigate={setCurrentPage} />
-        ) : (
-          <PageComponent />
-        )}
-      </main>
-    </div>
+    <StoreProvider>
+      <div className="flex h-screen bg-gray-100">
+        <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} pages={pages} />
+        <main className="flex-1 overflow-auto p-6">
+          <h1 className="text-2xl font-bold mb-4">{pages[currentPage].title}</h1>
+          {currentPage === 'dashboard' ? (
+            <PageComponent onNavigate={setCurrentPage} />
+          ) : (
+            <PageComponent />
+          )}
+        </main>
+      </div>
+    </StoreProvider>
   );
 }
