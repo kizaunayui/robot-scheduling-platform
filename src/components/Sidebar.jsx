@@ -1,6 +1,7 @@
-import { Bot, Settings, List, Map, BarChart3, FileText, Monitor } from 'lucide-react';
+import { LayoutDashboard, Bot, Settings, List, Map, BarChart3, FileText, Monitor, Users, MapPin } from 'lucide-react';
 
 const icons = {
+  dashboard: LayoutDashboard,
   robotStatus: Bot,
   robotConfig: Settings,
   taskQueue: List,
@@ -8,6 +9,8 @@ const icons = {
   taskStatistics: BarChart3,
   operationLog: FileText,
   deviceMonitor: Monitor,
+  campusMap: MapPin,
+  userManagement: Users,
 };
 
 export default function Sidebar({ currentPage, setCurrentPage, pages }) {
