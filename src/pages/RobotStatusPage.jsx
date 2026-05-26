@@ -1,78 +1,109 @@
-import { useState } from 'react';
-import { useStore } from '../store';
-import { RobotStatusEnum } from '../mock/robotStatus';
-
-const statusColors = {
-  RUNNING: 'bg-green-100 text-green-800',
-  IDLE: 'bg-gray-100 text-gray-800',
-  ERROR: 'bg-red-100 text-red-800',
-  CHARGING: 'bg-yellow-100 text-yellow-800',
-};
+import { useAppStore } from '../store/AppStore'
+import { robotTypeColors, robotStatusNames } from '../data/mapData'
 
 export default function RobotStatusPage() {
-  const { robots, robotOperate } = useStore();
-  const [page, setPage] = useState(1);
-  const pageSize = 5;
-  const totalPages = Math.ceil(robots.length / pageSize);
-  const paged = robots.slice((page - 1) * pageSize, page * pageSize);
+  const { robots, updateRobot } = useAppStore()
+
+  const statusCounts = {
+    running: robots.filter(r => r.status === 'running').length,
+    idle: robots.filter(r => r.status === 'idle').length,
+    charging: robots.filter(r => r.status === 'charging').length,
+    error: robots.filter(r => r.status === 'error').length,
+  }
+
+  const handleAction = (robotId, action) => {
+    if (action === 'start') updateRobot(robotId, { status: 'running' })
+    else if (action === 'pause') updateRobot(robotId, { status: 'idle' })
+    else if (action === 'charge') updateRobot(robotId, { status: 'charging' })
+    else if (action === 'restart') updateRobot(robotId, { status: 'idle', battery: 100 })
+  }
 
   return (
-    <div>
-      <div className="bg-white rounded shadow overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="p-3 text-left">机器人ID</th>
-              <th className="p-3 text-left">名称</th>
-              <th className="p-3 text-left">类型</th>
-              <th className="p-3 text-left">当前位置</th>
-              <th className="p-3 text-left">状态</th>
-              <th className="p-3 text-left">电量</th>
-              <th className="p-3 text-left">任务进度</th>
-              <th className="p-3 text-left">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paged.map(r => (
-              <tr key={r.robotId} className="border-t">
-                <td className="p-3">{r.robotId}</td>
-                <td className="p-3">{r.name}</td>
-                <td className="p-3">{r.type}</td>
-                <td className="p-3">{r.currentLocation}</td>
-                <td className="p-3">
-                  <span className={`px-2 py-1 rounded text-xs ${statusColors[r.status]}`}>
-                    {RobotStatusEnum[r.status]}
-                  </span>
-                </td>
-                <td className="p-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-16 bg-gray-200 rounded h-2">
-                      <div className={`h-2 rounded ${r.battery < 20 ? 'bg-red-500' : r.battery < 50 ? 'bg-yellow-500' : 'bg-green-500'}`} style={{ width: `${r.battery}%` }} />
-                    </div>
-                    {r.battery}%
-                  </div>
-                </td>
-                <td className="p-3">
-                  <div className="w-24 bg-gray-200 rounded h-2">
-                    <div className="bg-blue-500 h-2 rounded" style={{ width: `${r.taskProgress}%` }} />
-                  </div>
-                </td>
-                <td className="p-3 space-x-1">
-                  <button onClick={() => robotOperate(r.robotId, 'START')} className="px-2 py-1 bg-green-500 text-white rounded text-xs">启动</button>
-                  <button onClick={() => robotOperate(r.robotId, 'PAUSE')} className="px-2 py-1 bg-yellow-500 text-white rounded text-xs">暂停</button>
-                  <button onClick={() => robotOperate(r.robotId, 'RESTART')} className="px-2 py-1 bg-blue-500 text-white rounded text-xs">重启</button>
-                  <button onClick={() => robotOperate(r.robotId, 'LOCATION_UPDATE')} className="px-2 py-1 bg-purple-500 text-white rounded text-xs">定位更新</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-white">🤖 机器人状态管理</h1>
+
+      {/* 状态统计 */}
+      <div className="grid grid-cols-4 gap-4">
+        {[
+          { label: '运行中', count: statusCounts.running, color: 'bg-blue-600' },
+          { label: '待机', count: statusCounts.idle, color: 'bg-green-600' },
+          { label: '充电中', count: statusCounts.charging, color: 'bg-yellow-600' },
+          { label: '故障', count: statusCounts.error, color: 'bg-red-600' },
+        ].map(s => (
+          <div key={s.label} className={`${s.color} rounded-lg p-4 text-white`}>
+            <p className="text-sm opacity-80">{s.label}</p>
+            <p className="text-3xl font-bold">{s.count}</p>
+          </div>
+        ))}
       </div>
-      <div className="flex justify-center gap-2 mt-4">
-        <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50">上一页</button>
-        <span className="px-3 py-1">{page} / {totalPages}</span>
-        <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50">下一页</button>
+
+      {/* 机器人列表 */}
+      <div className="grid grid-cols-2 gap-4">
+        {robots.map(robot => (
+          <div key={robot.id} className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: robotTypeColors[robot.type] || '#9e9e9e' }} />
+                <h3 className="text-white font-bold">{robot.name}</h3>
+              </div>
+              <span className={`px-2 py-0.5 rounded text-xs ${
+                robot.status === 'running' ? 'bg-blue-900 text-blue-300' :
+                robot.status === 'idle' ? 'bg-green-900 text-green-300' :
+                robot.status === 'charging' ? 'bg-yellow-900 text-yellow-300' :
+                'bg-red-900 text-red-300'
+              }`}>
+                {robotStatusNames[robot.status]}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs text-slate-400 mb-3">
+              <div>ID: <span className="text-slate-200">{robot.id}</span></div>
+              <div>类型: <span className="text-slate-200">{robot.type}</span></div>
+              <div>位置: <span className="text-slate-200">{robot.currentLocation}</span></div>
+              <div>速度: <span className="text-slate-200">{robot.speed}m/s</span></div>
+            </div>
+
+            {/* 电量条 */}
+            <div className="mb-3">
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-slate-400">电量</span>
+                <span className={robot.battery > 60 ? 'text-green-400' : robot.battery > 30 ? 'text-yellow-400' : 'text-red-400'}>{robot.battery}%</span>
+              </div>
+              <div className="w-full bg-slate-700 rounded-full h-2">
+                <div
+                  className={`h-2 rounded-full ${robot.battery > 60 ? 'bg-green-500' : robot.battery > 30 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                  style={{ width: `${robot.battery}%` }}
+                />
+              </div>
+            </div>
+
+            {robot.battery < 30 && (
+              <div className="bg-red-900/30 border border-red-700 rounded p-2 text-xs text-red-300 mb-3">
+                ⚠️ 电量不足，请及时充电
+              </div>
+            )}
+
+            {robot.taskId && (
+              <div className="text-xs text-slate-400 mb-3">
+                当前任务: <span className="text-blue-400">{robot.taskId}</span>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              {robot.status !== 'running' && (
+                <button onClick={() => handleAction(robot.id, 'start')} className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-500">启动</button>
+              )}
+              {robot.status === 'running' && (
+                <button onClick={() => handleAction(robot.id, 'pause')} className="bg-yellow-600 text-white px-3 py-1 rounded text-xs hover:bg-yellow-500">暂停</button>
+              )}
+              {robot.status !== 'charging' && (
+                <button onClick={() => handleAction(robot.id, 'charge')} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-500">充电</button>
+              )}
+              <button onClick={() => handleAction(robot.id, 'restart')} className="bg-slate-700 text-slate-300 px-3 py-1 rounded text-xs hover:bg-slate-600">重启</button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
-  );
+  )
 }

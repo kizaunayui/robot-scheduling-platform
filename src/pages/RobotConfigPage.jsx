@@ -1,120 +1,120 @@
-import { useState } from 'react';
-import { defaultConfigs, ResponsibleArea, TaskPriority, TaskType, PathPreference } from '../mock/robotConfig';
+import { useState } from 'react'
+import { useAppStore } from '../store/AppStore'
+
+const defaultConfigs = {
+  R001: { responsibleArea: '住院部', maxLoad: 20, maxSpeed: 1.5, chargeThreshold: 20, taskPriority: 'HIGH', taskType: '药品配送', pathPreference: '最短路径' },
+  R002: { responsibleArea: '住院部', maxLoad: 15, maxSpeed: 1.2, chargeThreshold: 25, taskPriority: 'MEDIUM', taskType: '药品配送', pathPreference: '最快路径' },
+  R003: { responsibleArea: '门诊部', maxLoad: 10, maxSpeed: 2.0, chargeThreshold: 15, taskPriority: 'HIGH', taskType: '样本转运', pathPreference: '最少人流路径' },
+  R004: { responsibleArea: '手术部', maxLoad: 30, maxSpeed: 1.0, chargeThreshold: 30, taskPriority: 'HIGH', taskType: '器械运输', pathPreference: '最短路径' },
+  R005: { responsibleArea: '门诊部', maxLoad: 20, maxSpeed: 1.5, chargeThreshold: 20, taskPriority: 'MEDIUM', taskType: '药品配送', pathPreference: '最快路径' },
+  R006: { responsibleArea: '住院部', maxLoad: 10, maxSpeed: 1.8, chargeThreshold: 20, taskPriority: 'LOW', taskType: '样本转运', pathPreference: '最少人流路径' },
+  R007: { responsibleArea: '手术部', maxLoad: 25, maxSpeed: 1.2, chargeThreshold: 25, taskPriority: 'MEDIUM', taskType: '器械运输', pathPreference: '最短路径' },
+  R008: { responsibleArea: '门诊部', maxLoad: 18, maxSpeed: 1.6, chargeThreshold: 20, taskPriority: 'HIGH', taskType: '药品配送', pathPreference: '最快路径' },
+  R009: { responsibleArea: '住院部', maxLoad: 12, maxSpeed: 1.4, chargeThreshold: 20, taskPriority: 'MEDIUM', taskType: '样本转运', pathPreference: '最短路径' },
+  R010: { responsibleArea: '住院部', maxLoad: 22, maxSpeed: 1.3, chargeThreshold: 25, taskPriority: 'LOW', taskType: '医疗废物处理', pathPreference: '最少人流路径' },
+}
 
 export default function RobotConfigPage() {
-  const [configs, setConfigs] = useState(defaultConfigs);
-  const [selectedRobot, setSelectedRobot] = useState('R001');
-  const [message, setMessage] = useState('');
-  const [errors, setErrors] = useState({});
-  const config = configs[selectedRobot];
+  const { robots, updateRobot } = useAppStore()
+  const [configs, setConfigs] = useState(defaultConfigs)
+  const [selectedRobot, setSelectedRobot] = useState('R001')
+  const [saved, setSaved] = useState(false)
 
-  const validate = (field, value) => {
-    const errs = { ...errors };
-    if (field === 'maxLoad' && (value < 0 || value === '')) {
-      errs.maxLoad = '最大载重不能为负数';
-    } else {
-      delete errs.maxLoad;
-    }
-    if (field === 'maxSpeed' && (value < 0 || value === '')) {
-      errs.maxSpeed = '最大速度不能为负数';
-    } else {
-      delete errs.maxSpeed;
-    }
-    if (field === 'chargeThreshold' && (value < 0 || value > 100 || value === '')) {
-      errs.chargeThreshold = '充电阈值必须在 0-100 之间';
-    } else {
-      delete errs.chargeThreshold;
-    }
-    setErrors(errs);
-  };
+  const config = configs[selectedRobot] || {}
 
-  const update = (field, value) => {
-    validate(field, value);
-    setConfigs(prev => ({ ...prev, [selectedRobot]: { ...prev[selectedRobot], [field]: value } }));
-  };
+  const handleChange = (key, value) => {
+    setConfigs(prev => ({
+      ...prev,
+      [selectedRobot]: { ...prev[selectedRobot], [key]: value },
+    }))
+    setSaved(false)
+  }
 
-  const save = () => {
-    if (Object.keys(errors).length > 0) {
-      setMessage('⚠️ 请修正配置错误后再保存');
-      setTimeout(() => setMessage(''), 2000);
-      return;
-    }
-    if (config.maxLoad < 0) { setMessage('⚠️ 最大载重不能为负数'); return; }
-    if (config.maxSpeed < 0) { setMessage('⚠️ 最大速度不能为负数'); return; }
-    if (config.chargeThreshold < 0 || config.chargeThreshold > 100) { setMessage('⚠️ 充电阈值必须在 0-100'); return; }
-    setMessage('✅ 配置已保存！');
-    setTimeout(() => setMessage(''), 2000);
-  };
+  const handleSave = () => {
+    const cfg = configs[selectedRobot]
+    updateRobot(selectedRobot, { speed: cfg.maxSpeed })
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
 
-  const restore = () => {
-    setConfigs(prev => ({ ...prev, [selectedRobot]: { ...defaultConfigs[selectedRobot] } }));
-    setErrors({});
-    setMessage('✅ 已恢复默认配置！');
-    setTimeout(() => setMessage(''), 2000);
-  };
-
-  const testPath = () => {
-    const distance = (Math.random() * 800 + 200).toFixed(0);
-    const time = (Math.random() * 15 + 3).toFixed(0);
-    const battery = (Math.random() * 12 + 3).toFixed(1);
-    setMessage(`✅ 路径测试成功：${config.taskStartPoint} → ${config.taskEndPoint}，距离 ${distance}m，预计耗时 ${time} 分钟，预计电量消耗 ${battery}%`);
-    setTimeout(() => setMessage(''), 5000);
-  };
-
-  const Select = ({ label, value, options, field }) => (
-    <div>
-      <label className="block text-sm font-medium mb-1">{label}</label>
-      <select value={value} onChange={e => update(field, e.target.value)} className="w-full border rounded px-2 py-1">
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </div>
-  );
-
-  const Input = ({ label, value, field, type = 'text', min, max }) => (
-    <div>
-      <label className="block text-sm font-medium mb-1">{label}</label>
-      <input
-        type={type}
-        value={value}
-        min={min}
-        max={max}
-        onChange={e => update(field, type === 'number' ? Number(e.target.value) : e.target.value)}
-        className={`w-full border rounded px-2 py-1 ${errors[field] ? 'border-red-500' : ''}`}
-      />
-      {errors[field] && <p className="text-red-500 text-xs mt-1">{errors[field]}</p>}
-    </div>
-  );
+  const handleBatchSave = () => {
+    Object.entries(configs).forEach(([id, cfg]) => {
+      updateRobot(id, { speed: cfg.maxSpeed })
+    })
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
 
   return (
-    <div>
-      <div className="mb-4 flex items-center gap-4">
-        <label className="font-medium">选择机器人：</label>
-        <select value={selectedRobot} onChange={e => { setSelectedRobot(e.target.value); setErrors({}); }} className="border rounded px-2 py-1">
-          {Object.keys(defaultConfigs).map(id => <option key={id} value={id}>{id}</option>)}
-        </select>
-      </div>
-      {message && <div className={`mb-4 p-2 rounded ${message.includes('⚠️') ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>{message}</div>}
-      <div className="bg-white rounded shadow p-4 grid grid-cols-2 gap-4">
-        <Select label="负责区域" value={config.responsibleArea} options={ResponsibleArea} field="responsibleArea" />
-        <Input label="最大载重(kg)" value={config.maxLoad} field="maxLoad" type="number" min={0} />
-        <Input label="最大速度(m/s)" value={config.maxSpeed} field="maxSpeed" type="number" min={0} />
-        <Input label="充电阈值(%)" value={config.chargeThreshold} field="chargeThreshold" type="number" min={0} max={100} />
-        <Input label="负责人" value={config.responsiblePerson} field="responsiblePerson" />
-        <Select label="任务优先级" value={config.taskPriority} options={TaskPriority} field="taskPriority" />
-        <Select label="任务类型" value={config.taskType} options={TaskType} field="taskType" />
-        <Input label="上午开始" value={config.morningStart} field="morningStart" />
-        <Input label="上午结束" value={config.morningEnd} field="morningEnd" />
-        <Input label="下午开始" value={config.afternoonStart} field="afternoonStart" />
-        <Input label="下午结束" value={config.afternoonEnd} field="afternoonEnd" />
-        <Input label="任务起点" value={config.taskStartPoint} field="taskStartPoint" />
-        <Input label="任务终点" value={config.taskEndPoint} field="taskEndPoint" />
-        <Select label="路径偏好" value={config.pathPreference} options={PathPreference} field="pathPreference" />
-      </div>
-      <div className="mt-4 space-x-2">
-        <button onClick={save} className="px-4 py-2 bg-blue-500 text-white rounded">保存配置</button>
-        <button onClick={restore} className="px-4 py-2 bg-gray-500 text-white rounded">恢复默认</button>
-        <button onClick={testPath} className="px-4 py-2 bg-green-500 text-white rounded">测试路径</button>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-white">⚙️ 机器人配置管理</h1>
+
+      <div className="grid grid-cols-4 gap-6">
+        {/* 左侧：机器人列表 */}
+        <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+          <h2 className="text-sm font-bold text-white mb-3">机器人列表</h2>
+          <div className="space-y-1">
+            {robots.map(r => (
+              <button
+                key={r.id}
+                onClick={() => { setSelectedRobot(r.id); setSaved(false); }}
+                className={`w-full text-left px-3 py-2 rounded text-sm ${
+                  selectedRobot === r.id ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                {r.id} - {r.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 右侧：配置表单 */}
+        <div className="col-span-3 bg-slate-900 rounded-lg p-6 border border-slate-700">
+          <h2 className="text-lg font-bold text-white mb-4">配置: {selectedRobot} - {robots.find(r => r.id === selectedRobot)?.name}</h2>
+
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              { key: 'responsibleArea', label: '负责区域', type: 'select', options: ['手术部', '住院部', '门诊部'] },
+              { key: 'maxLoad', label: '最大载重(kg)', type: 'number' },
+              { key: 'maxSpeed', label: '最大速度(m/s)', type: 'number' },
+              { key: 'chargeThreshold', label: '充电阈值(%)', type: 'number' },
+              { key: 'taskPriority', label: '任务优先级', type: 'select', options: ['LOW', 'MEDIUM', 'HIGH'] },
+              { key: 'taskType', label: '任务类型', type: 'select', options: ['药品配送', '样本转运', '器械运输', '医疗废物处理'] },
+              { key: 'pathPreference', label: '路径偏好', type: 'select', options: ['最短路径', '最快路径', '最少人流路径'] },
+            ].map(field => (
+              <div key={field.key}>
+                <label className="block text-xs text-slate-400 mb-1">{field.label}</label>
+                {field.type === 'select' ? (
+                  <select
+                    value={config[field.key] || ''}
+                    onChange={e => handleChange(field.key, e.target.value)}
+                    className="w-full bg-slate-800 text-white text-sm px-3 py-2 rounded border border-slate-600"
+                  >
+                    {field.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                ) : (
+                  <input
+                    type="number"
+                    value={config[field.key] || ''}
+                    onChange={e => handleChange(field.key, parseFloat(e.target.value))}
+                    className="w-full bg-slate-800 text-white text-sm px-3 py-2 rounded border border-slate-600"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-3 mt-6">
+            <button onClick={handleSave} className="bg-blue-600 text-white px-6 py-2 rounded text-sm hover:bg-blue-500">
+              保存配置
+            </button>
+            <button onClick={handleBatchSave} className="bg-green-600 text-white px-6 py-2 rounded text-sm hover:bg-green-500">
+              批量应用
+            </button>
+            {saved && <span className="text-green-400 text-sm self-center">✓ 已保存</span>}
+          </div>
+        </div>
       </div>
     </div>
-  );
+  )
 }

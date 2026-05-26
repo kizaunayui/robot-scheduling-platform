@@ -1,137 +1,153 @@
-import { useState } from 'react';
-import { useStore } from '../store';
-import { TaskTypeEnum, TaskStatusEnum, PriorityLevelEnum } from '../mock/taskQueue';
+import { useState } from 'react'
+import { useAppStore } from '../store/AppStore'
 
 const statusColors = {
-  PENDING: 'bg-gray-100 text-gray-800',
-  IN_PROGRESS: 'bg-blue-100 text-blue-800',
-  COMPLETED: 'bg-green-100 text-green-800',
-  ERROR: 'bg-red-100 text-red-800',
-};
+  PENDING: 'bg-slate-700 text-slate-300',
+  IN_PROGRESS: 'bg-blue-900 text-blue-300',
+  COMPLETED: 'bg-green-900 text-green-300',
+  ERROR: 'bg-red-900 text-red-300',
+}
+const statusLabels = { PENDING: '待执行', IN_PROGRESS: '执行中', COMPLETED: '已完成', ERROR: '异常' }
+const priorityColors = { HIGH: 'text-red-400', MEDIUM: 'text-yellow-400', LOW: 'text-green-400' }
+const priorityLabels = { HIGH: '高', MEDIUM: '中', LOW: '低' }
 
 export default function TaskQueuePage() {
-  const { tasks, robots, addTask, dispatchTask, cancelTask, urgentTask } = useStore();
-  const [filters, setFilters] = useState({ type: '', status: '', priority: '', keyword: '' });
-  const [page, setPage] = useState(1);
-  const [showAdd, setShowAdd] = useState(false);
-  const [newTask, setNewTask] = useState({ taskType: '药品配送', startLocation: '', endLocation: '', priority: 'MEDIUM', estimatedFinishTime: '' });
-  const pageSize = 5;
+  const { tasks, addTask, updateTask, dispatchTask, robots, addLog } = useAppStore()
+  const [filter, setFilter] = useState('ALL')
+  const [sort, setSort] = useState('priority')
+  const [showCreate, setShowCreate] = useState(false)
+  const [newTask, setNewTask] = useState({ taskType: '药品配送', startLocation: '', endLocation: '', priority: 'MEDIUM' })
 
-  const filtered = tasks.filter(t => {
-    if (filters.type && t.taskType !== filters.type) return false;
-    if (filters.status && t.status !== filters.status) return false;
-    if (filters.priority && t.priority !== filters.priority) return false;
-    if (filters.keyword && !t.taskId.includes(filters.keyword) && !t.startLocation.includes(filters.keyword) && !t.endLocation.includes(filters.keyword)) return false;
-    return true;
-  });
+  const filtered = tasks
+    .filter(t => filter === 'ALL' || t.status === filter)
+    .sort((a, b) => {
+      if (sort === 'priority') {
+        const order = { HIGH: 0, MEDIUM: 1, LOW: 2 }
+        return (order[a.priority] || 2) - (order[b.priority] || 2)
+      }
+      if (sort === 'status') {
+        const order = { IN_PROGRESS: 0, PENDING: 1, ERROR: 2, COMPLETED: 3 }
+        return (order[a.status] || 3) - (order[b.status] || 3)
+      }
+      return a.taskId.localeCompare(b.taskId)
+    })
 
-  const totalPages = Math.ceil(filtered.length / pageSize);
-  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const handleCreate = () => {
+    if (!newTask.startLocation || !newTask.endLocation) return
+    const task = {
+      taskId: `T${String(tasks.length + 1).padStart(3, '0')}`,
+      ...newTask,
+      status: 'PENDING',
+      assignedRobot: null,
+      createTime: new Date().toLocaleString(),
+      estimatedFinishTime: '-',
+      progress: 0,
+    }
+    addTask(task)
+    addLog({ robotId: '-', taskType: task.taskType, action: '任务创建', detail: `${task.startLocation}→${task.endLocation}`, status: '成功', operator: '手动创建' })
+    setShowCreate(false)
+    setNewTask({ taskType: '药品配送', startLocation: '', endLocation: '', priority: 'MEDIUM' })
+  }
 
-  const handleAdd = () => {
-    if (!newTask.startLocation || !newTask.endLocation) return;
-    addTask(newTask);
-    setNewTask({ taskType: '药品配送', startLocation: '', endLocation: '', priority: 'MEDIUM', estimatedFinishTime: '' });
-    setShowAdd(false);
-  };
+  const handleDispatch = (taskId) => {
+    dispatchTask(taskId)
+    addLog({ robotId: '-', taskType: '-', action: '任务派发', detail: `派发任务${taskId}`, status: '成功', operator: '系统自动' })
+  }
 
-  const availableRobots = robots.filter(r => r.status === 'IDLE' && r.battery > 20);
+  const handleUrgent = (taskId) => {
+    updateTask(taskId, { priority: 'HIGH' })
+    addLog({ robotId: '-', taskType: '-', action: '加急处理', detail: `任务${taskId}升级为高优先级`, status: '成功', operator: '手动操作' })
+  }
 
   return (
-    <div>
-      <div className="bg-white rounded shadow p-4 mb-4 flex gap-3 flex-wrap items-center">
-        <select value={filters.type} onChange={e => { setFilters(f => ({ ...f, type: e.target.value })); setPage(1); }} className="border rounded px-2 py-1">
-          <option value="">全部类型</option>
-          {Object.entries(TaskTypeEnum).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-        <select value={filters.status} onChange={e => { setFilters(f => ({ ...f, status: e.target.value })); setPage(1); }} className="border rounded px-2 py-1">
-          <option value="">全部状态</option>
-          {Object.entries(TaskStatusEnum).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-        <select value={filters.priority} onChange={e => { setFilters(f => ({ ...f, priority: e.target.value })); setPage(1); }} className="border rounded px-2 py-1">
-          <option value="">全部优先级</option>
-          {Object.entries(PriorityLevelEnum).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-        <input placeholder="关键词搜索..." value={filters.keyword} onChange={e => { setFilters(f => ({ ...f, keyword: e.target.value })); setPage(1); }} className="border rounded px-2 py-1" />
-        <button onClick={() => setShowAdd(!showAdd)} className="ml-auto px-4 py-1 bg-blue-500 text-white rounded">+ 新增任务</button>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-white">📋 任务队列管理</h1>
+        <button onClick={() => setShowCreate(!showCreate)} className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-500">
+          + 创建任务
+        </button>
       </div>
 
-      {showAdd && (
-        <div className="bg-white rounded shadow p-4 mb-4 grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm mb-1">任务类型</label>
-            <select value={newTask.taskType} onChange={e => setNewTask(t => ({ ...t, taskType: e.target.value }))} className="w-full border rounded px-2 py-1">
-              {Object.values(TaskTypeEnum).map(v => <option key={v} value={v}>{v}</option>)}
+      {/* 创建任务表单 */}
+      {showCreate && (
+        <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+          <h3 className="text-sm font-bold text-white mb-3">创建新任务</h3>
+          <div className="grid grid-cols-4 gap-3">
+            <select value={newTask.taskType} onChange={e => setNewTask(p => ({ ...p, taskType: e.target.value }))} className="bg-slate-800 text-white text-sm px-3 py-2 rounded border border-slate-600">
+              {['药品配送', '样本转运', '器械运输', '医疗废物处理'].map(t => <option key={t}>{t}</option>)}
+            </select>
+            <input placeholder="起点" value={newTask.startLocation} onChange={e => setNewTask(p => ({ ...p, startLocation: e.target.value }))} className="bg-slate-800 text-white text-sm px-3 py-2 rounded border border-slate-600" />
+            <input placeholder="终点" value={newTask.endLocation} onChange={e => setNewTask(p => ({ ...p, endLocation: e.target.value }))} className="bg-slate-800 text-white text-sm px-3 py-2 rounded border border-slate-600" />
+            <select value={newTask.priority} onChange={e => setNewTask(p => ({ ...p, priority: e.target.value }))} className="bg-slate-800 text-white text-sm px-3 py-2 rounded border border-slate-600">
+              <option value="HIGH">高优先级</option>
+              <option value="MEDIUM">中优先级</option>
+              <option value="LOW">低优先级</option>
             </select>
           </div>
-          <div>
-            <label className="block text-sm mb-1">优先级</label>
-            <select value={newTask.priority} onChange={e => setNewTask(t => ({ ...t, priority: e.target.value }))} className="w-full border rounded px-2 py-1">
-              {Object.entries(PriorityLevelEnum).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm mb-1">起点</label>
-            <input value={newTask.startLocation} onChange={e => setNewTask(t => ({ ...t, startLocation: e.target.value }))} className="w-full border rounded px-2 py-1" placeholder="如：药房" />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">终点</label>
-            <input value={newTask.endLocation} onChange={e => setNewTask(t => ({ ...t, endLocation: e.target.value }))} className="w-full border rounded px-2 py-1" placeholder="如：住院部3楼" />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">预计完成时间</label>
-            <input value={newTask.estimatedFinishTime} onChange={e => setNewTask(t => ({ ...t, estimatedFinishTime: e.target.value }))} className="w-full border rounded px-2 py-1" placeholder="如：2026-05-25 15:00" />
-          </div>
-          <div className="flex items-end">
-            <button onClick={handleAdd} className="px-4 py-1 bg-green-500 text-white rounded">确认添加</button>
-          </div>
-          <div className="col-span-2 text-xs text-gray-500">
-            可用机器人：{availableRobots.length > 0 ? availableRobots.map(r => `${r.robotId}(${r.battery}%)`).join('、') : '暂无空闲机器人'}
-          </div>
+          <button onClick={handleCreate} className="mt-3 bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-500">确认创建</button>
         </div>
       )}
 
-      <div className="bg-white rounded shadow overflow-hidden">
+      {/* 筛选排序 */}
+      <div className="flex gap-3">
+        {['ALL', 'PENDING', 'IN_PROGRESS', 'COMPLETED', 'ERROR'].map(f => (
+          <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 rounded text-xs ${filter === f ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+            {f === 'ALL' ? '全部' : statusLabels[f]}
+          </button>
+        ))}
+        <select value={sort} onChange={e => setSort(e.target.value)} className="bg-slate-800 text-white text-xs px-3 py-1.5 rounded border border-slate-600 ml-auto">
+          <option value="priority">按优先级</option>
+          <option value="status">按状态</option>
+        </select>
+      </div>
+
+      {/* 任务列表 */}
+      <div className="bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="p-3 text-left">任务ID</th>
-              <th className="p-3 text-left">类型</th>
-              <th className="p-3 text-left">起点</th>
-              <th className="p-3 text-left">终点</th>
-              <th className="p-3 text-left">优先级</th>
-              <th className="p-3 text-left">状态</th>
-              <th className="p-3 text-left">预计完成</th>
-              <th className="p-3 text-left">分配机器人</th>
-              <th className="p-3 text-left">操作</th>
+          <thead>
+            <tr className="bg-slate-800 text-slate-400 text-xs">
+              <th className="px-4 py-3 text-left">任务ID</th>
+              <th className="px-4 py-3 text-left">类型</th>
+              <th className="px-4 py-3 text-left">起止点</th>
+              <th className="px-4 py-3 text-left">优先级</th>
+              <th className="px-4 py-3 text-left">状态</th>
+              <th className="px-4 py-3 text-left">机器人</th>
+              <th className="px-4 py-3 text-left">进度</th>
+              <th className="px-4 py-3 text-left">操作</th>
             </tr>
           </thead>
           <tbody>
-            {paged.map(t => (
-              <tr key={t.taskId} className="border-t">
-                <td className="p-3">{t.taskId}</td>
-                <td className="p-3">{TaskTypeEnum[t.taskType] || t.taskType}</td>
-                <td className="p-3">{t.startLocation}</td>
-                <td className="p-3">{t.endLocation}</td>
-                <td className="p-3">{PriorityLevelEnum[t.priority]}</td>
-                <td className="p-3"><span className={`px-2 py-1 rounded text-xs ${statusColors[t.status]}`}>{TaskStatusEnum[t.status]}</span></td>
-                <td className="p-3">{t.estimatedFinishTime}</td>
-                <td className="p-3">{t.assignedRobot || '未分配'}</td>
-                <td className="p-3 space-x-1">
-                  {t.status === 'PENDING' && <button onClick={() => dispatchTask(t.taskId)} className="px-2 py-1 bg-blue-500 text-white rounded text-xs">调度</button>}
-                  {t.status !== 'COMPLETED' && <button onClick={() => cancelTask(t.taskId)} className="px-2 py-1 bg-red-500 text-white rounded text-xs">取消</button>}
-                  <button onClick={() => urgentTask(t.taskId)} className="px-2 py-1 bg-orange-500 text-white rounded text-xs">加急</button>
+            {filtered.map(task => (
+              <tr key={task.taskId} className="border-t border-slate-800 hover:bg-slate-800/50">
+                <td className="px-4 py-3 text-white">{task.taskId}</td>
+                <td className="px-4 py-3 text-slate-300">{task.taskType}</td>
+                <td className="px-4 py-3 text-slate-300">{task.startLocation} → {task.endLocation}</td>
+                <td className={`px-4 py-3 font-medium ${priorityColors[task.priority]}`}>{priorityLabels[task.priority]}</td>
+                <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-xs ${statusColors[task.status]}`}>{statusLabels[task.status]}</span></td>
+                <td className="px-4 py-3 text-slate-300">{task.assignedRobot || '-'}</td>
+                <td className="px-4 py-3">
+                  <div className="w-20 bg-slate-700 rounded-full h-1.5">
+                    <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${task.progress}%` }} />
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex gap-1">
+                    {task.status === 'PENDING' && (
+                      <button onClick={() => handleDispatch(task.taskId)} className="bg-blue-600 text-white px-2 py-1 rounded text-xs hover:bg-blue-500">派发</button>
+                    )}
+                    {task.status !== 'COMPLETED' && (
+                      <button onClick={() => handleUrgent(task.taskId)} className="bg-orange-600 text-white px-2 py-1 rounded text-xs hover:bg-orange-500">加急</button>
+                    )}
+                    {task.status === 'PENDING' && (
+                      <button onClick={() => updateTask(task.taskId, { status: 'COMPLETED', progress: 100 })} className="bg-slate-700 text-slate-300 px-2 py-1 rounded text-xs hover:bg-slate-600">取消</button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <div className="flex justify-center gap-2 mt-4">
-        <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50">上一页</button>
-        <span className="px-3 py-1">{page} / {totalPages}</span>
-        <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50">下一页</button>
-      </div>
     </div>
-  );
+  )
 }

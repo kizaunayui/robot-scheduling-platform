@@ -1,83 +1,92 @@
-import { useState } from 'react';
-import { useStore } from '../store';
-import { DeviceStatusEnum, DeviceAreaEnum } from '../mock/deviceMonitor';
+import { useState, useMemo } from 'react'
+import { useAppStore } from '../store/AppStore'
 
-const statusColors = {
-  WORKING: 'bg-green-100 text-green-800',
-  CHARGING: 'bg-yellow-100 text-yellow-800',
-  FAULT: 'bg-red-100 text-red-800',
-  STANDBY: 'bg-gray-100 text-gray-800',
-};
+const statusInfo = {
+  WORKING: { label: '运行中', color: 'bg-green-600', dot: 'bg-green-500' },
+  STANDBY: { label: '待机', color: 'bg-slate-600', dot: 'bg-slate-400' },
+  CHARGING: { label: '充电中', color: 'bg-yellow-600', dot: 'bg-yellow-500' },
+  FAULT: { label: '故障', color: 'bg-red-600', dot: 'bg-red-500' },
+}
 
 export default function DeviceMonitorPage() {
-  const { devices } = useStore();
-  const [filters, setFilters] = useState({ deviceId: '', deviceName: '', status: '', area: '' });
-  const [page, setPage] = useState(1);
-  const pageSize = 5;
+  const { devices } = useAppStore()
+  const [selectedDevice, setSelectedDevice] = useState(null)
+  const [filterStatus, setFilterStatus] = useState('')
 
-  const filtered = devices.filter(d => {
-    if (filters.deviceId && !d.deviceId.includes(filters.deviceId)) return false;
-    if (filters.deviceName && !d.deviceName.includes(filters.deviceName)) return false;
-    if (filters.status && d.status !== filters.status) return false;
-    if (filters.area && d.area !== filters.area) return false;
-    return true;
-  });
+  const filtered = useMemo(() =>
+    filterStatus ? devices.filter(d => d.status === filterStatus) : devices
+  , [devices, filterStatus])
 
-  const totalPages = Math.ceil(filtered.length / pageSize);
-  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const stats = useMemo(() => {
+    const working = devices.filter(d => d.status === 'WORKING').length
+    const standby = devices.filter(d => d.status === 'STANDBY').length
+    const charging = devices.filter(d => d.status === 'CHARGING').length
+    const fault = devices.filter(d => d.status === 'FAULT').length
+    return { working, standby, charging, fault, total: devices.length }
+  }, [devices])
 
   return (
-    <div>
-      <div className="bg-white rounded shadow p-4 mb-4 flex gap-3 flex-wrap">
-        <input placeholder="设备ID" value={filters.deviceId} onChange={e => { setFilters(f => ({ ...f, deviceId: e.target.value })); setPage(1); }} className="border rounded px-2 py-1" />
-        <input placeholder="设备名称" value={filters.deviceName} onChange={e => { setFilters(f => ({ ...f, deviceName: e.target.value })); setPage(1); }} className="border rounded px-2 py-1" />
-        <select value={filters.status} onChange={e => { setFilters(f => ({ ...f, status: e.target.value })); setPage(1); }} className="border rounded px-2 py-1">
-          <option value="">全部状态</option>
-          {Object.entries(DeviceStatusEnum).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-        <select value={filters.area} onChange={e => { setFilters(f => ({ ...f, area: e.target.value })); setPage(1); }} className="border rounded px-2 py-1">
-          <option value="">全部区域</option>
-          {DeviceAreaEnum.map(a => <option key={a} value={a}>{a}</option>)}
-        </select>
+    <div className="space-y-4">
+      <h1 className="text-2xl font-bold text-white">📡 设备监控</h1>
+
+      <div className="grid grid-cols-4 gap-4">
+        {[
+          { label: '运行中', value: stats.working, color: 'text-green-400', bg: 'bg-green-600/20' },
+          { label: '待机', value: stats.standby, color: 'text-slate-400', bg: 'bg-slate-600/20' },
+          { label: '充电中', value: stats.charging, color: 'text-yellow-400', bg: 'bg-yellow-600/20' },
+          { label: '故障', value: stats.fault, color: 'text-red-400', bg: 'bg-red-600/20' },
+        ].map(s => (
+          <div key={s.label} className={`${s.bg} rounded-lg p-4 border border-slate-700 text-center cursor-pointer hover:border-slate-500`} onClick={() => setFilterStatus(filterStatus === s.label ? '' : (s.label === '运行中' ? 'WORKING' : s.label === '待机' ? 'STANDBY' : s.label === '充电中' ? 'CHARGING' : 'FAULT'))}>
+            <div className={`text-3xl font-bold ${s.color}`}>{s.value}</div>
+            <div className="text-slate-400 text-sm mt-1">{s.label}</div>
+          </div>
+        ))}
       </div>
-      <div className="bg-white rounded shadow overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="p-3 text-left">设备ID</th>
-              <th className="p-3 text-left">设备名称</th>
-              <th className="p-3 text-left">状态</th>
-              <th className="p-3 text-left">电量</th>
-              <th className="p-3 text-left">区域</th>
-              <th className="p-3 text-left">最后活跃</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paged.map(d => (
-              <tr key={d.deviceId} className="border-t">
-                <td className="p-3">{d.deviceId}</td>
-                <td className="p-3">{d.deviceName}</td>
-                <td className="p-3"><span className={`px-2 py-1 rounded text-xs ${statusColors[d.status]}`}>{DeviceStatusEnum[d.status]}</span></td>
-                <td className="p-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-16 bg-gray-200 rounded h-2">
-                      <div className={`h-2 rounded ${d.batteryLevel < 20 ? 'bg-red-500' : d.batteryLevel < 50 ? 'bg-yellow-500' : 'bg-green-500'}`} style={{ width: `${d.batteryLevel}%` }} />
-                    </div>
-                    {d.batteryLevel}%
+
+      <div className="grid grid-cols-3 gap-4">
+        <div className="col-span-2 space-y-3">
+          {filtered.map(d => (
+            <div key={d.deviceId} className={`bg-slate-900 rounded-lg p-4 border cursor-pointer hover:border-slate-500 ${selectedDevice?.deviceId === d.deviceId ? 'border-blue-500' : 'border-slate-700'}`} onClick={() => setSelectedDevice(d)}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className={`w-3 h-3 rounded-full ${statusInfo[d.status]?.dot}`} />
+                  <div>
+                    <div className="text-white font-medium">{d.deviceName}</div>
+                    <div className="text-slate-400 text-xs">{d.deviceId} · {d.area}</div>
                   </div>
-                </td>
-                <td className="p-3">{d.area}</td>
-                <td className="p-3">{d.lastActiveTime}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex justify-center gap-2 mt-4">
-        <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50">上一页</button>
-        <span className="px-3 py-1">{page} / {totalPages}</span>
-        <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50">下一页</button>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <div className="flex items-center gap-2">
+                      <div className="w-20 bg-slate-700 rounded-full h-2">
+                        <div className={`h-2 rounded-full ${d.batteryLevel < 20 ? 'bg-red-500' : d.batteryLevel < 50 ? 'bg-yellow-500' : 'bg-green-500'}`} style={{ width: `${d.batteryLevel}%` }} />
+                      </div>
+                      <span className="text-sm text-slate-300 w-10">{d.batteryLevel}%</span>
+                    </div>
+                  </div>
+                  <span className={`px-2 py-1 rounded text-xs text-white ${statusInfo[d.status]?.color}`}>{statusInfo[d.status]?.label}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+          <h3 className="text-sm font-bold text-white mb-3">📋 设备详情</h3>
+          {selectedDevice ? (
+            <div className="space-y-3 text-sm">
+              <div><span className="text-slate-400">设备ID：</span><span className="text-white">{selectedDevice.deviceId}</span></div>
+              <div><span className="text-slate-400">设备名称：</span><span className="text-white">{selectedDevice.deviceName}</span></div>
+              <div><span className="text-slate-400">状态：</span><span className={`ml-1 px-2 py-0.5 rounded text-xs text-white ${statusInfo[selectedDevice.status]?.color}`}>{statusInfo[selectedDevice.status]?.label}</span></div>
+              <div><span className="text-slate-400">电量：</span><span className="text-white">{selectedDevice.batteryLevel}%</span></div>
+              <div><span className="text-slate-400">区域：</span><span className="text-white">{selectedDevice.area}</span></div>
+              <div><span className="text-slate-400">最后活跃：</span><span className="text-white">{selectedDevice.lastActiveTime}</span></div>
+            </div>
+          ) : (
+            <p className="text-slate-500 text-sm">点击设备查看详情</p>
+          )}
+        </div>
       </div>
     </div>
-  );
+  )
 }
