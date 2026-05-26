@@ -68,3 +68,4 @@ src/
 ├── App.jsx              # 路由配置（BrowserRouter）
 └── main.jsx             # 入口
 ```
+# trigger deploy
