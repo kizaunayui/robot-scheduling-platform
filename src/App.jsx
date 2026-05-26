@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { HashRouter, Routes, Route } from 'react-router-dom'
 import { AppStoreProvider } from './store/AppStore'
 import Layout from './components/Layout'
 import DashboardPage from './pages/DashboardPage'
@@ -15,7 +15,7 @@ import UserManagementPage from './pages/UserManagementPage'
 export default function App() {
   return (
     <AppStoreProvider>
-      <BrowserRouter basename="/robot-scheduling-platform">
+      <HashRouter>
         <Layout>
           <Routes>
             <Route path="/" element={<DashboardPage />} />
@@ -30,7 +30,7 @@ export default function App() {
             <Route path="/user-management" element={<UserManagementPage />} />
           </Routes>
         </Layout>
-      </BrowserRouter>
+      </HashRouter>
     </AppStoreProvider>
   )
 }

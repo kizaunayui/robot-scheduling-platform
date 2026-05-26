@@ -1,64 +1,60 @@
 import { useState, useMemo } from 'react'
 import { useAppStore } from '../store/AppStore'
+import { taskTypeNames, taskStatusConfig } from '../data/mapData'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444']
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
 
 export default function TaskStatisticsPage() {
-  const { tasks, robots } = useAppStore()
+  const { tasks, robots, metrics } = useAppStore()
   const [page, setPage] = useState(1)
   const pageSize = 5
 
   const stats = useMemo(() => {
-    const completed = tasks.filter(t => t.status === 'COMPLETED').length
-    const pending = tasks.filter(t => t.status === 'PENDING').length
-    const inProgress = tasks.filter(t => t.status === 'IN_PROGRESS').length
-    const error = tasks.filter(t => t.status === 'ERROR').length
-    return { completed, pending, inProgress, error, total: tasks.length }
+    const completed = tasks.filter(t => t.status === '已完成').length
+    const pending = tasks.filter(t => t.status === '待派发').length
+    const inProgress = tasks.filter(t => t.status === '执行中').length
+    const cancelled = tasks.filter(t => t.status === '已撤销').length
+    return { completed, pending, inProgress, cancelled, total: tasks.length }
   }, [tasks])
 
   const typeDistribution = useMemo(() => {
     const counts = {}
-    tasks.forEach(t => { counts[t.taskType] = (counts[t.taskType] || 0) + 1 })
-    return Object.entries(counts).map(([name, value]) => ({ name, value }))
+    tasks.forEach(t => { counts[t.type] = (counts[t.type] || 0) + 1 })
+    return Object.entries(counts).map(([type, value]) => ({ name: taskTypeNames[type] || type, value }))
   }, [tasks])
+
+  const statusData = [
+    { name: '待派发', value: stats.pending },
+    { name: '执行中', value: stats.inProgress },
+    { name: '已完成', value: stats.completed },
+    { name: '已撤销', value: stats.cancelled },
+  ]
 
   const robotWorkload = useMemo(() => {
     const counts = {}
     tasks.forEach(t => {
-      if (t.assignedRobot) {
-        counts[t.assignedRobot] = (counts[t.assignedRobot] || 0) + 1
-      }
+      if (t.robotId) counts[t.robotId] = (counts[t.robotId] || 0) + 1
     })
     return Object.entries(counts)
       .map(([id, count]) => ({ name: id, tasks: count }))
       .sort((a, b) => b.tasks - a.tasks)
-      .slice(0, 8)
   }, [tasks])
-
-  const statusData = [
-    { name: '待执行', value: stats.pending },
-    { name: '执行中', value: stats.inProgress },
-    { name: '已完成', value: stats.completed },
-    { name: '异常', value: stats.error },
-  ]
 
   const totalPages = Math.ceil(tasks.length / pageSize)
   const paged = tasks.slice((page - 1) * pageSize, page * pageSize)
-
-  const statusLabel = { COMPLETED: '已完成', IN_PROGRESS: '执行中', PENDING: '待执行', ERROR: '异常' }
-  const statusColor = { COMPLETED: 'bg-green-600', IN_PROGRESS: 'bg-blue-600', PENDING: 'bg-slate-600', ERROR: 'bg-red-600' }
 
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold text-white">📈 任务统计</h1>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         {[
           { label: '总任务', value: stats.total, color: 'text-blue-400' },
+          { label: '执行中', value: stats.inProgress, color: 'text-indigo-400' },
           { label: '已完成', value: stats.completed, color: 'text-green-400' },
-          { label: '待处理', value: stats.pending, color: 'text-yellow-400' },
-          { label: '异常', value: stats.error, color: 'text-red-400' },
+          { label: '待派发', value: stats.pending, color: 'text-yellow-400' },
+          { label: '利用率', value: `${Math.round(metrics.utilization * 100)}%`, color: 'text-purple-400' },
         ].map(s => (
           <div key={s.label} className="bg-slate-900 rounded-lg p-4 border border-slate-700 text-center">
             <div className={`text-3xl font-bold ${s.color}`}>{s.value}</div>
@@ -109,29 +105,47 @@ export default function TaskStatisticsPage() {
       <div className="bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
         <div className="p-3 bg-slate-800 flex justify-between items-center">
           <h3 className="text-sm font-bold text-white">任务明细</h3>
+          <div className="text-xs text-slate-400">
+            总调度成本: {metrics.sumOfCosts} | 最大完工时间: {metrics.makespan}
+          </div>
         </div>
         <table className="w-full text-sm">
           <thead className="bg-slate-800">
             <tr>
               <th className="p-3 text-left text-slate-300">ID</th>
               <th className="p-3 text-left text-slate-300">类型</th>
+              <th className="p-3 text-left text-slate-300">名称</th>
               <th className="p-3 text-left text-slate-300">起点</th>
               <th className="p-3 text-left text-slate-300">终点</th>
+              <th className="p-3 text-left text-slate-300">优先级</th>
               <th className="p-3 text-left text-slate-300">状态</th>
               <th className="p-3 text-left text-slate-300">机器人</th>
+              <th className="p-3 text-left text-slate-300">评分</th>
+              <th className="p-3 text-left text-slate-300">进度</th>
             </tr>
           </thead>
           <tbody>
-            {paged.map(t => (
-              <tr key={t.taskId} className="border-t border-slate-700/50">
-                <td className="p-3 text-white">{t.taskId}</td>
-                <td className="p-3 text-slate-300">{t.taskType}</td>
-                <td className="p-3 text-slate-300">{t.startLocation}</td>
-                <td className="p-3 text-slate-300">{t.endLocation}</td>
-                <td className="p-3"><span className={`px-2 py-1 rounded text-xs text-white ${statusColor[t.status]}`}>{statusLabel[t.status]}</span></td>
-                <td className="p-3 text-slate-300">{t.assignedRobot || '-'}</td>
-              </tr>
-            ))}
+            {paged.map(t => {
+              const sc = taskStatusConfig[t.status] || { label: t.status, color: 'bg-slate-600' }
+              return (
+                <tr key={t.id} className="border-t border-slate-700/50">
+                  <td className="p-3 text-white font-mono">{t.id}</td>
+                  <td className="p-3 text-slate-300">{taskTypeNames[t.type] || t.type}</td>
+                  <td className="p-3 text-slate-300">{t.name}</td>
+                  <td className="p-3 text-slate-300">{t.start}</td>
+                  <td className="p-3 text-slate-300">{t.end}</td>
+                  <td className="p-3 text-slate-300">{t.priority === 3 ? '高' : t.priority === 2 ? '中' : '低'}</td>
+                  <td className="p-3"><span className={`px-2 py-1 rounded text-xs text-white ${sc.color}`}>{sc.label}</span></td>
+                  <td className="p-3 text-slate-300">{t.robotId || '-'}</td>
+                  <td className="p-3 text-slate-400 text-xs">{t.matchScore || '-'}</td>
+                  <td className="p-3">
+                    <div className="w-16 bg-slate-700 rounded-full h-1.5">
+                      <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${t.progress}%` }} />
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
         <div className="flex justify-center gap-2 p-3 bg-slate-800">
