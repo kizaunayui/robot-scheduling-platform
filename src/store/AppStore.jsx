@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { gridMap, gridRobots, gridTasks } from '../data/mapData';
 import {
   optimizeSchedule,
@@ -236,6 +236,57 @@ export function AppStoreProvider({ children }) {
     addLog(`路径规划完成，共 ${Object.keys(pathResult.paths).length} 条路径`);
     return pathResult;
   }, [tasks, robots, mapData, addLog]);
+
+  // === 模拟自动任务推进和位置更新 Ticker ===
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTasks((prevTasks) => {
+        let updated = false;
+        const nextTasks = prevTasks.map((t) => {
+          if (t.status !== '执行中') return t;
+          const step = Math.floor(Math.random() * 8) + 6;
+          const newProgress = Math.min(100, t.progress + step);
+
+          // 更新机器人位置
+          if (t.robotId) {
+            setPaths((prevPaths) => {
+              const path = prevPaths[t.robotId];
+              if (path && path.length > 0) {
+                const stepIndex = Math.min(path.length - 1, Math.floor((newProgress / 100) * path.length));
+                const nextPos = path[stepIndex];
+                setRobots((prevRobots) =>
+                  prevRobots.map((r) =>
+                    r.id === t.robotId
+                      ? {
+                          ...r,
+                          pos: nextPos,
+                          battery: Math.max(10, r.battery - 0.4),
+                          status: newProgress >= 100 ? 'idle' : 'busy',
+                          taskId: newProgress >= 100 ? undefined : r.taskId,
+                        }
+                      : r
+                  )
+                );
+              }
+              return prevPaths;
+            });
+          }
+
+          updated = true;
+          if (newProgress >= 100) {
+            setTimeout(() => {
+              addLog(`🎉 任务已完成并归档：${t.id}`);
+            }, 0);
+            return { ...t, status: '已完成', progress: 100 };
+          }
+          return { ...t, progress: newProgress };
+        });
+        return updated ? nextTasks : prevTasks;
+      });
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [addLog]);
 
   // === Users（保持不变） ===
   const [users, setUsers] = useState(initialUsers.map((u) => ({ ...u })));
