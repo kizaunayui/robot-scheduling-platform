@@ -5,50 +5,31 @@ import {
   planAllPaths,
   calculateMetrics,
   typeName,
+  scoreRobot,
 } from '../utils/simulator';
 
 const AppStoreContext = createContext(null);
 
-// 辅助：生成日志时间戳
 function now() {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
 }
 
-// 用户数据（保持不变）
-const initialUsers = [
-  { userId: 'U001', username: 'admin', role: '管理员', phone: '13800000001', status: '启用', permissions: ['全部权限', '用户管理', '系统配置', '数据导出'], createdAt: '2026-01-10' },
-  { userId: 'U002', username: 'zhangwei', role: '调度员', phone: '13800000002', status: '启用', permissions: ['任务调度', '机器人控制', '任务规划'], createdAt: '2026-02-15' },
-  { userId: 'U003', username: 'lina', role: '维护人员', phone: '13800000003', status: '启用', permissions: ['设备维护', '故障处理', '日志查看'], createdAt: '2026-03-01' },
-  { userId: 'U004', username: 'wangfang', role: '观察员', phone: '13800000004', status: '启用', permissions: ['数据查看', '报表导出'], createdAt: '2026-03-20' },
-  { userId: 'U005', username: 'liuyang', role: '调度员', phone: '13800000005', status: '禁用', permissions: ['任务调度', '机器人控制', '任务规划'], createdAt: '2026-04-05' },
-];
-
 export function AppStoreProvider({ children }) {
-  // === Robots ===
   const [robots, setRobots] = useState(gridRobots.map((r) => ({ ...r })));
-
-  // === Tasks ===
   const [tasks, setTasks] = useState(gridTasks.map((t) => ({ ...t })));
-
-  // === Paths & Conflicts ===
   const [paths, setPaths] = useState({});
   const [conflicts, setConflicts] = useState([]);
-
-  // === Logs ===
   const [logs, setLogs] = useState([]);
 
   const addLog = useCallback((message) => {
-    setLogs((prev) => [{ time: now(), message }, ...prev].slice(0, 80));
+    setLogs((prev) => [{ time: now(), message }, ...prev].slice(0, 120));
   }, []);
 
-  // === Metrics（动态计算） ===
   const metrics = calculateMetrics(tasks, robots, paths);
-
-  // === 地图数据 ===
   const mapData = gridMap;
 
-  // === 派发任务（创建+自动推荐） ===
+  // 派发任务
   const dispatchTask = useCallback(
     (data) => {
       const newTask = {
@@ -64,13 +45,10 @@ export function AppStoreProvider({ children }) {
         progress: 0,
       };
 
-      // 先添加任务，再执行调度
       const updatedTasks = [...tasks, newTask];
       const updatedRobots = robots.map((r) => ({ ...r }));
 
       const result = optimizeSchedule(updatedTasks, updatedRobots, mapData);
-
-      // 规划路径
       const pathResult = planAllPaths(result.tasks, result.robots, mapData);
 
       setTasks(result.tasks);
@@ -87,7 +65,7 @@ export function AppStoreProvider({ children }) {
     [tasks, robots, mapData, addLog]
   );
 
-  // === 批量优化调度 ===
+  // 批量优化调度
   const handleOptimizeSchedule = useCallback(() => {
     const updatedTasks = tasks.map((t) => ({ ...t }));
     const updatedRobots = robots.map((r) => ({ ...r }));
@@ -104,7 +82,7 @@ export function AppStoreProvider({ children }) {
     result.logs.forEach((l) => addLog(l));
   }, [tasks, robots, mapData, addLog]);
 
-  // === 机器人操作 ===
+  // 机器人操作
   const robotAction = useCallback(
     (robotId, action) => {
       setRobots((prev) =>
@@ -116,8 +94,10 @@ export function AppStoreProvider({ children }) {
           else if (action === 'charge') {
             updated.status = 'charging';
             updated.pos = [...gridMap.locations['充电站']];
-          } else if (action === 'locate') {
-            // 定位到当前位置（无变化）
+          } else if (action === 'fault') {
+            updated.status = 'error';
+          } else if (action === 'recover') {
+            updated.status = 'idle';
           }
           return updated;
         })
@@ -127,16 +107,12 @@ export function AppStoreProvider({ children }) {
     [addLog]
   );
 
-  // === 任务操作 ===
+  // 任务操作
   const rushTask = useCallback(
     (taskId) => {
       const updatedTasks = tasks.map((t) => {
         if (t.id !== taskId) return t;
-        return {
-          ...t,
-          priority: 3,
-          status: t.status === '待派发' ? '加急' : t.status,
-        };
+        return { ...t, priority: 3, status: t.status === '待派发' ? '加急' : t.status };
       });
       const updatedRobots = robots.map((r) => ({ ...r }));
       const result = optimizeSchedule(updatedTasks, updatedRobots, mapData);
@@ -228,7 +204,7 @@ export function AppStoreProvider({ children }) {
     [tasks, robots, mapData, addLog]
   );
 
-  // === 路径规划 ===
+  // 路径规划
   const planRoutes = useCallback(() => {
     const pathResult = planAllPaths(tasks, robots, mapData);
     setPaths(pathResult.paths);
@@ -237,7 +213,17 @@ export function AppStoreProvider({ children }) {
     return pathResult;
   }, [tasks, robots, mapData, addLog]);
 
-  // === 模拟自动任务推进和位置更新 Ticker ===
+  // 重置仿真
+  const resetSimulation = useCallback(() => {
+    setRobots(gridRobots.map((r) => ({ ...r })));
+    setTasks(gridTasks.map((t) => ({ ...t })));
+    setPaths({});
+    setConflicts([]);
+    setLogs([]);
+    addLog('仿真已重置');
+  }, [addLog]);
+
+  // 自动任务推进 Ticker
   useEffect(() => {
     const interval = setInterval(() => {
       setTasks((prevTasks) => {
@@ -247,7 +233,6 @@ export function AppStoreProvider({ children }) {
           const step = Math.floor(Math.random() * 8) + 6;
           const newProgress = Math.min(100, t.progress + step);
 
-          // 更新机器人位置
           if (t.robotId) {
             setPaths((prevPaths) => {
               const path = prevPaths[t.robotId];
@@ -275,7 +260,7 @@ export function AppStoreProvider({ children }) {
           updated = true;
           if (newProgress >= 100) {
             setTimeout(() => {
-              addLog(`🎉 任务已完成并归档：${t.id}`);
+              addLog(`任务已完成并归档：${t.id}`);
             }, 0);
             return { ...t, status: '已完成', progress: 100 };
           }
@@ -288,24 +273,31 @@ export function AppStoreProvider({ children }) {
     return () => clearInterval(interval);
   }, [addLog]);
 
-  // === Users（保持不变） ===
-  const [users, setUsers] = useState(initialUsers.map((u) => ({ ...u })));
-  const updateUser = useCallback((userId, updates) => {
-    setUsers((prev) => prev.map((u) => (u.userId === userId ? { ...u, ...updates } : u)));
-  }, []);
+  // 获取任务推荐理由
+  const getRecommendation = useCallback(
+    (task) => {
+      const available = robots.filter((r) => r.status === 'idle');
+      if (available.length === 0) return null;
 
-  // === 设备数据（从 robots 同步） ===
-  const devices = robots.map((r) => ({
-    deviceId: r.id,
-    deviceName: r.name,
-    status: r.status === 'idle' ? 'STANDBY' : r.status === 'busy' ? 'WORKING' : r.status === 'charging' ? 'CHARGING' : r.status === 'paused' ? 'STANDBY' : 'FAULT',
-    batteryLevel: r.battery,
-    area: r.area,
-    lastActiveTime: now(),
-  }));
+      let bestScore = -Infinity;
+      let bestRobot = null;
+      let bestReasons = [];
+
+      for (const robot of available) {
+        const { score, reasons } = scoreRobot(robot, task, mapData);
+        if (score > bestScore) {
+          bestScore = score;
+          bestRobot = robot;
+          bestReasons = reasons;
+        }
+      }
+
+      return bestRobot ? { robot: bestRobot, score: bestScore, reasons: bestReasons } : null;
+    },
+    [robots, mapData]
+  );
 
   const value = {
-    // 核心数据
     robots,
     tasks,
     paths,
@@ -313,28 +305,18 @@ export function AppStoreProvider({ children }) {
     logs,
     metrics,
     mapData,
-    devices,
-    users,
 
-    // 任务操作
     dispatchTask,
     optimizeSchedule: handleOptimizeSchedule,
     rushTask,
     cancelTask,
     progressTask,
     completeTask,
-
-    // 机器人操作
     robotAction,
-
-    // 路径规划
     planRoutes,
-
-    // 日志
+    resetSimulation,
     addLog,
-
-    // 用户管理
-    updateUser,
+    getRecommendation,
   };
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>;

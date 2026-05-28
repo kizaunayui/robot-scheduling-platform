@@ -1,30 +1,24 @@
-import { useState, useEffect, useRef } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { useAppStore } from '../store/AppStore'
-import { taskTypeColors, taskTypeNames, taskStatusConfig } from '../data/mapData'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts'
-
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
+import { taskTypeNames, taskTypeColors } from '../data/mapData'
+import { ListChecks, Play, RotateCcw, Clock, Zap } from 'lucide-react'
 
 export default function DashboardPage() {
-  const { robots, tasks, logs, metrics, paths, conflicts, mapData } = useAppStore()
+  const { robots, tasks, logs, metrics, paths, conflicts, mapData, optimizeSchedule, resetSimulation, addLog } = useAppStore()
   const canvasRef = useRef(null)
   const [animTick, setAnimTick] = useState(0)
 
-  // 动态统计
   const runningTasks = tasks.filter(t => t.status === '执行中').length
   const completedTasks = tasks.filter(t => t.status === '已完成').length
   const pendingTasks = tasks.filter(t => t.status === '待派发' || t.status === '加急').length
-  const onlineRobots = robots.filter(r => r.status !== 'fault').length
+  const onlineRobots = robots.filter(r => r.status !== 'error').length
+  const idleRobots = robots.filter(r => r.status === 'idle').length
   const busyRobots = robots.filter(r => r.status === 'busy').length
+  const utilization = robots.length > 0 ? Math.round((busyRobots / robots.length) * 100) : 0
 
-  const statusDist = [
-    { name: '空闲', value: robots.filter(r => r.status === 'idle').length },
-    { name: '执行中', value: robots.filter(r => r.status === 'busy').length },
-    { name: '充电中', value: robots.filter(r => r.status === 'charging').length },
-    { name: '暂停', value: robots.filter(r => r.status === 'paused').length },
-  ]
+  const recentLogs = logs.slice(0, 10)
 
-  // Canvas 网格地图
+  // Canvas 网格地图预览
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -53,20 +47,26 @@ export default function DashboardPage() {
       for (let y = 0; y < mapData.rows; y++) {
         if (obsSet.has(`${x},${y}`)) {
           ctx.fillStyle = '#334155'
-          ctx.fillRect(x * cellW, y * cellH, cellW, cellH)
+          ctx.fillRect(x * cellW + 1, y * cellH + 1, cellW - 2, cellH - 2)
         }
       }
     }
 
     // 位置标记
     Object.entries(mapData.locations).forEach(([name, [lx, ly]]) => {
-      ctx.fillStyle = '#6366f1'
-      ctx.fillRect(lx * cellW + 2, ly * cellH + 2, cellW - 4, cellH - 4)
+      const cx = lx * cellW + cellW / 2
+      const cy = ly * cellH + cellH / 2
+      ctx.fillStyle = 'rgba(99, 102, 241, 0.12)'
+      ctx.beginPath(); ctx.arc(cx, cy, cellW * 0.7, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = '#4f46e5'
+      ctx.beginPath()
+      ctx.roundRect(lx * cellW + 2, ly * cellH + 2, cellW - 4, cellH - 4, 3)
+      ctx.fill()
       ctx.fillStyle = '#fff'
-      ctx.font = '9px sans-serif'
+      ctx.font = 'bold 9px sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText(name, lx * cellW + cellW / 2, ly * cellH + cellH / 2)
+      ctx.fillText(name, cx, cy)
     })
 
     // 路径
@@ -75,7 +75,7 @@ export default function DashboardPage() {
       if (path.length < 2) return
       ctx.strokeStyle = pathColors[i % pathColors.length]
       ctx.lineWidth = 2
-      ctx.globalAlpha = 0.6
+      ctx.globalAlpha = 0.55
       ctx.setLineDash([4, 3])
       ctx.beginPath()
       path.forEach(([px, py], j) => {
@@ -91,18 +91,13 @@ export default function DashboardPage() {
     robots.forEach(r => {
       const cx = r.pos[0] * cellW + cellW / 2
       const cy = r.pos[1] * cellH + cellH / 2
-      const color = r.status === 'busy' ? '#3b82f6' : r.status === 'charging' ? '#f59e0b' : r.status === 'paused' ? '#ef4444' : '#10b981'
+      const color = r.status === 'busy' ? '#3b82f6' : r.status === 'charging' ? '#f59e0b' : r.status === 'paused' ? '#ef4444' : r.status === 'error' ? '#ef4444' : '#10b981'
       ctx.fillStyle = color
-      ctx.beginPath()
-      ctx.arc(cx, cy, 8, 0, Math.PI * 2)
-      ctx.fill()
-      ctx.strokeStyle = '#fff'
-      ctx.lineWidth = 1.5
-      ctx.stroke()
+      ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI * 2); ctx.fill()
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke()
       ctx.fillStyle = '#fff'
       ctx.font = 'bold 7px sans-serif'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
       ctx.fillText(r.id, cx, cy)
     })
 
@@ -113,9 +108,7 @@ export default function DashboardPage() {
         const cy = c.loc[1] * cellH + cellH / 2
         ctx.fillStyle = '#ef4444'
         ctx.globalAlpha = 0.5
-        ctx.beginPath()
-        ctx.arc(cx, cy, 10, 0, Math.PI * 2)
-        ctx.fill()
+        ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2); ctx.fill()
         ctx.globalAlpha = 1
         ctx.fillStyle = '#fff'
         ctx.font = 'bold 8px sans-serif'
@@ -129,93 +122,75 @@ export default function DashboardPage() {
     return () => clearInterval(timer)
   }, [])
 
-  const recentLogs = logs.slice(0, 6)
-
-  // 任务趋势数据（从 tasks 动态生成）
-  const taskTypeDist = Object.entries(
-    tasks.reduce((acc, t) => { acc[t.type] = (acc[t.type] || 0) + 1; return acc }, {})
-  ).map(([type, count]) => ({ name: taskTypeNames[type] || type, value: count }))
+  const kpiCards = [
+    { label: '今日任务数', value: metrics.totalTasks, color: 'bg-blue-600', icon: ListChecks },
+    { label: '待派发', value: pendingTasks, color: 'bg-amber-600', icon: Clock },
+    { label: '执行中', value: runningTasks, color: 'bg-indigo-600', icon: Play },
+    { label: '已完成', value: completedTasks, color: 'bg-emerald-600', icon: ListChecks },
+    { label: '在线机器人', value: onlineRobots, color: 'bg-teal-600', icon: Zap },
+    { label: '空闲机器人', value: idleRobots, color: 'bg-cyan-600', icon: Zap },
+    { label: '利用率', value: `${utilization}%`, color: 'bg-purple-600', icon: Zap },
+    { label: '冲突数', value: conflicts.length, color: 'bg-rose-600', icon: Zap },
+  ]
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">📊 系统首页</h1>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-white">调度总览</h1>
+        <div className="flex gap-2">
+          <button onClick={optimizeSchedule} className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-500 transition">
+            <Play size={14} />运行调度
+          </button>
+          <button onClick={resetSimulation} className="flex items-center gap-1.5 bg-slate-700 text-slate-300 px-3 py-1.5 rounded text-sm hover:bg-slate-600 transition">
+            <RotateCcw size={14} />重置仿真
+          </button>
+        </div>
+      </div>
 
-      {/* 统计卡片 */}
-      <div className="grid grid-cols-5 gap-4">
-        {[
-          { label: '总任务', value: metrics.totalTasks, icon: '📋', color: 'bg-blue-600' },
-          { label: '执行中', value: metrics.runningTasks, icon: '🚀', color: 'bg-indigo-600' },
-          { label: '已完成', value: metrics.completedTasks, icon: '✅', color: 'bg-green-600' },
-          { label: '在线机器人', value: metrics.onlineRobots, icon: '🤖', color: 'bg-teal-600' },
-          { label: '路径冲突', value: conflicts.length, icon: '⚡', color: 'bg-orange-600' },
-        ].map(card => (
-          <div key={card.label} className={`${card.color} rounded-lg p-4 text-white shadow-lg`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm opacity-80">{card.label}</p>
-                <p className="text-3xl font-bold mt-1">{card.value}</p>
+      {/* KPI 卡片 */}
+      <div className="grid grid-cols-4 gap-3">
+        {kpiCards.map(card => {
+          const Icon = card.icon
+          return (
+            <div key={card.label} className={`${card.color} rounded-lg p-3 text-white shadow-lg`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs opacity-80">{card.label}</p>
+                  <p className="text-2xl font-bold mt-0.5">{card.value}</p>
+                </div>
+                <Icon size={28} className="opacity-40" />
               </div>
-              <span className="text-4xl opacity-60">{card.icon}</span>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       <div className="grid grid-cols-3 gap-4">
         {/* 地图预览 */}
-        <div className="col-span-2 bg-slate-900 rounded-lg p-4 border border-slate-700">
-          <h2 className="text-sm font-bold text-white mb-3">🗺️ 院区实时地图（网格视图）</h2>
-          <canvas ref={canvasRef} className="w-full rounded border border-slate-600" style={{ aspectRatio: '3/2' }} />
-          <div className="flex gap-3 mt-2 text-xs text-slate-400">
+        <div className="col-span-2 bg-slate-900 rounded-lg p-4 border border-slate-700/60">
+          <h2 className="text-sm font-bold text-white mb-3">院区调度地图预览</h2>
+          <canvas ref={canvasRef} className="w-full rounded border border-slate-700" style={{ aspectRatio: '3/2' }} />
+          <div className="flex gap-3 mt-2 text-xs text-slate-500">
             <span><span className="inline-block w-3 h-3 rounded-full bg-green-500 mr-1" />空闲</span>
             <span><span className="inline-block w-3 h-3 rounded-full bg-blue-500 mr-1" />执行中</span>
             <span><span className="inline-block w-3 h-3 rounded-full bg-yellow-500 mr-1" />充电</span>
-            <span><span className="inline-block w-3 h-3 rounded-full bg-red-500 mr-1" />暂停</span>
-            <span><span className="inline-block w-3 h-3 rounded bg-slate-500 mr-1" />障碍物</span>
+            <span><span className="inline-block w-3 h-3 rounded-full bg-red-500 mr-1" />故障/暂停</span>
+            <span><span className="inline-block w-3 h-3 rounded bg-indigo-500 mr-1" />科室</span>
           </div>
         </div>
 
-        {/* 机器人状态饼图 */}
-        <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
-          <h2 className="text-sm font-bold text-white mb-3">🤖 机器人状态分布</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={statusDist} cx="50%" cy="50%" innerRadius={40} outerRadius={70} dataKey="value" label={({ name, value }) => `${name}:${value}`}>
-                {statusDist.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
-              </Pie>
-              <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#fff' }} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        {/* 任务类型分布 */}
-        <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
-          <h2 className="text-sm font-bold text-white mb-3">📈 任务类型分布</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={taskTypeDist}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} />
-              <YAxis stroke="#94a3b8" fontSize={11} />
-              <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#fff' }} />
-              <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* 最近操作日志 */}
-        <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
-          <h2 className="text-sm font-bold text-white mb-3">📝 最近操作日志</h2>
-          <div className="space-y-2">
-            {recentLogs.length === 0 && <p className="text-slate-500 text-sm">暂无日志</p>}
+        {/* 最近调度日志 */}
+        <div className="bg-slate-900 rounded-lg p-4 border border-slate-700/60">
+          <h2 className="text-sm font-bold text-white mb-3">最近调度日志</h2>
+          <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
+            {recentLogs.length === 0 && <p className="text-slate-600 text-xs">暂无日志</p>}
             {recentLogs.map((log, i) => (
-              <div key={i} className="flex items-center justify-between text-xs p-2 bg-slate-800 rounded">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-blue-500" />
-                  <span className="text-slate-300">{log.message}</span>
+              <div key={i} className="flex items-center justify-between text-xs p-2 bg-slate-800/60 rounded">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                  <span className="text-slate-400 truncate">{log.message}</span>
                 </div>
-                <span className="text-slate-500">{log.time}</span>
+                <span className="text-slate-600 shrink-0 ml-2">{log.time}</span>
               </div>
             ))}
           </div>
