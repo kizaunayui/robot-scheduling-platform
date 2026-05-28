@@ -106,7 +106,7 @@ export default function StatisticsPage() {
           { label: '总任务', value: stats.total, color: 'text-blue-400' },
           { label: '执行中', value: stats.inProgress, color: 'text-indigo-400' },
           { label: '已完成', value: stats.completed, color: 'text-emerald-400' },
-          { label: '冲突处理', value: metrics.conflictsResolved || 0, color: 'text-amber-400' },
+          { label: '冲突处理', value: `${metrics.conflictsResolved || 0}/${metrics.totalConflicts || 0}`, color: 'text-amber-400' },
           { label: '利用率', value: `${Math.round((metrics.utilization || 0) * 100)}%`, color: 'text-purple-400' },
         ].map(s => (
           <div key={s.label} className="bg-slate-900 rounded-lg p-3 border border-slate-700/60 text-center">
@@ -174,7 +174,7 @@ export default function StatisticsPage() {
                   { label: '平均响应时间', value: avgResponseTime },
                   { label: '总调度成本', value: metrics.sumOfCosts || 0 },
                   { label: '最大完工时间', value: metrics.makespan || 0 },
-                  { label: '冲突处理次数', value: metrics.conflictsResolved || 0 },
+                  { label: '冲突处理次数', value: `${metrics.conflictsResolved || 0}/${metrics.totalConflicts || 0}` },
                   { label: '任务完成率', value: stats.total > 0 ? `${Math.round((stats.completed / stats.total) * 100)}%` : '--' },
                 ].map(item => (
                   <div key={item.label} className="flex justify-between items-center text-sm py-2 border-b border-slate-800 last:border-0">

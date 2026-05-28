@@ -7,7 +7,7 @@ const priorityColors = { 3: 'text-red-400', 2: 'text-yellow-400', 1: 'text-green
 const priorityLabels = { 3: '高', 2: '中', 1: '低' }
 
 export default function TaskSchedulePage() {
-  const { tasks, robots, dispatchTask, rushTask, cancelTask, completeTask, getRecommendation } = useAppStore()
+  const { tasks, robots, dispatchTask, dispatchExistingTask, rushTask, cancelTask, completeTask, getRecommendation } = useAppStore()
   const [filter, setFilter] = useState('ALL')
   const [newTask, setNewTask] = useState({ type: 'medicine', start: '药房', end: '住院区A', weight: 3, priority: 1 })
 
@@ -153,7 +153,7 @@ export default function TaskSchedulePage() {
                   {/* 操作按钮 */}
                   <div className="flex gap-1.5 shrink-0">
                     {(task.status === '待派发' || task.status === '加急') && (
-                      <button onClick={() => dispatchTask({ type: task.type, name: task.name, start: task.start, end: task.end, weight: task.weight, priority: task.priority })} className="flex items-center gap-1 bg-blue-600 text-white px-2.5 py-1 rounded text-xs hover:bg-blue-500 transition">
+                      <button onClick={() => dispatchExistingTask(task.id)} className="flex items-center gap-1 bg-blue-600 text-white px-2.5 py-1 rounded text-xs hover:bg-blue-500 transition">
                         <Send size={12} />派发
                       </button>
                     )}
