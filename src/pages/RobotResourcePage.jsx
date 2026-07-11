@@ -1,6 +1,6 @@
 import { useAppStore } from '../store/AppStore'
 import { taskTypeNames } from '../data/mapData'
-import { Play, Pause, BatteryCharging, AlertTriangle, RotateCcw, Zap } from 'lucide-react'
+import { Play, Pause, BatteryCharging, AlertTriangle, RotateCcw } from 'lucide-react'
 
 const containerNames = { normal: '标准舱', cold: '冷链舱', sealed: '密闭舱', large: '大型舱' }
 
@@ -85,7 +85,7 @@ export default function RobotResourcePage() {
                 <div>
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-slate-500">电量</span>
-                    <span className={robot.battery > 60 ? 'text-emerald-400' : robot.battery > 30 ? 'text-amber-400' : 'text-red-400'}>{robot.battery}%</span>
+                    <span className={robot.battery > 60 ? 'text-emerald-400' : robot.battery > 30 ? 'text-amber-400' : 'text-red-400'}>{Math.round(robot.battery)}%</span>
                   </div>
                   <div className="w-full bg-slate-700 rounded-full h-2">
                     <div
@@ -119,9 +119,9 @@ export default function RobotResourcePage() {
 
                 {/* 操作按钮 */}
                 <div className="flex gap-2 pt-1">
-                  {(robot.status === 'paused' || robot.status === 'error') && (
+                  {(robot.status === 'paused' || robot.status === 'charging') && (
                     <button onClick={() => robotAction(robot.id, 'start')} className="flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded text-xs hover:bg-blue-500 transition">
-                      <Play size={12} />启动
+                      <Play size={12} />{robot.status === 'charging' ? '完成充电' : robot.taskId ? '继续任务' : '启动'}
                     </button>
                   )}
                   {(robot.status === 'idle' || robot.status === 'busy') && (
@@ -129,7 +129,7 @@ export default function RobotResourcePage() {
                       <Pause size={12} />暂停
                     </button>
                   )}
-                  {robot.status !== 'charging' && (
+                  {robot.status !== 'charging' && robot.status !== 'error' && (
                     <button onClick={() => robotAction(robot.id, 'charge')} className="flex items-center gap-1 bg-emerald-600 text-white px-3 py-1.5 rounded text-xs hover:bg-emerald-500 transition">
                       <BatteryCharging size={12} />回充
                     </button>

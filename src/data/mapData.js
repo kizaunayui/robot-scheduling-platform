@@ -239,6 +239,7 @@ export const taskStatusConfig = {
   '待派发': { label: '待派发', color: 'bg-slate-600', text: 'text-slate-300' },
   '加急': { label: '加急', color: 'bg-orange-600', text: 'text-orange-300' },
   '执行中': { label: '执行中', color: 'bg-blue-600', text: 'text-blue-300' },
+  '已暂停': { label: '已暂停', color: 'bg-orange-600', text: 'text-orange-200' },
   '已完成': { label: '已完成', color: 'bg-green-600', text: 'text-green-300' },
   '已撤销': { label: '已撤销', color: 'bg-red-600', text: 'text-red-300' },
 };

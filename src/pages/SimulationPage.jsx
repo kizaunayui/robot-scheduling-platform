@@ -1,18 +1,17 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { useAppStore } from '../store/AppStore'
-import { Play, RotateCcw, SkipForward } from 'lucide-react'
+import { Pause, Play, RotateCcw, SkipForward } from 'lucide-react'
 
 export default function SimulationPage() {
-  const { robots, tasks, paths, conflicts, mapData, optimizeSchedule, planRoutes, resetSimulation } = useAppStore()
+  const { robots, tasks, paths, conflicts, mapData, simulationRunning, toggleSimulation, stepSimulation, resetSimulation } = useAppStore()
   const canvasRef = useRef(null)
   const robotVisualsRef = useRef({})
   const [hoveredCell, setHoveredCell] = useState(null)
-  const [simRunning, setSimRunning] = useState(false)
 
   const W = 960, H = 640
   const cellW = W / mapData.cols
   const cellH = H / mapData.rows
-  const obsSet = new Set(mapData.obstacles.map(o => `${o[0]},${o[1]}`))
+  const obsSet = useMemo(() => new Set(mapData.obstacles.map(o => `${o[0]},${o[1]}`)), [mapData.obstacles])
 
   // 冲突信息
   const conflictDetails = conflicts.map(c => ({
@@ -22,21 +21,11 @@ export default function SimulationPage() {
     agents: `${c.a} ↔ ${c.b}`,
     strategy: c.type === 'vertex' ? '等待-重规划' : '路径绕行',
   }))
-
-  const handleRunSchedule = () => {
-    optimizeSchedule()
-    planRoutes()
-    setSimRunning(true)
-  }
-
-  const handleStepForward = () => {
-    planRoutes()
-  }
+  const hasRunningTasks = tasks.some(task => task.status === '执行中')
 
   const handleReset = () => {
     resetSimulation()
     robotVisualsRef.current = {}
-    setSimRunning(false)
   }
 
   // Canvas 渲染
@@ -130,7 +119,7 @@ export default function SimulationPage() {
 
       // 路径流光
       const pathColors = ['#10b981', '#3b82f6', '#ef4444', '#f59e0b']
-      Object.entries(paths).forEach(([robotId, path], idx) => {
+      Object.values(paths).forEach((path, idx) => {
         if (path.length < 2) return
         const color = pathColors[idx % pathColors.length]
 
@@ -152,7 +141,7 @@ export default function SimulationPage() {
       })
 
       // 冲突点 (红色/橙色标注)
-      conflicts.forEach((c, ci) => {
+      conflicts.forEach((c) => {
         if (c.loc) {
           const cx = c.loc[0] * cellW + cellW / 2
           const cy = c.loc[1] * cellH + cellH / 2
@@ -272,7 +261,7 @@ export default function SimulationPage() {
 
     render()
     return () => cancelAnimationFrame(animationId)
-  }, [robots, tasks, paths, conflicts, mapData, hoveredCell])
+  }, [robots, tasks, paths, conflicts, mapData, hoveredCell, cellW, cellH, obsSet])
 
   const getCell = useCallback((e) => {
     const canvas = canvasRef.current
@@ -293,10 +282,10 @@ export default function SimulationPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-white">院区调度仿真</h1>
         <div className="flex gap-2">
-          <button onClick={handleRunSchedule} className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-500 transition">
-            <Play size={14} />运行调度
+          <button onClick={toggleSimulation} className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm text-white transition ${simulationRunning ? 'bg-amber-600 hover:bg-amber-500' : 'bg-blue-600 hover:bg-blue-500'}`}>
+            {simulationRunning ? <Pause size={14} /> : <Play size={14} />}{simulationRunning ? '暂停仿真' : '运行调度'}
           </button>
-          <button onClick={handleStepForward} className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-1.5 rounded text-sm hover:bg-indigo-500 transition">
+          <button onClick={stepSimulation} disabled={simulationRunning || !hasRunningTasks} title={!hasRunningTasks ? '请先运行调度生成执行中任务' : undefined} className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-1.5 rounded text-sm hover:bg-indigo-500 transition disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500">
             <SkipForward size={14} />推进一步
           </button>
           <button onClick={handleReset} className="flex items-center gap-1.5 bg-slate-700 text-slate-300 px-3 py-1.5 rounded text-sm hover:bg-slate-600 transition">
@@ -305,9 +294,9 @@ export default function SimulationPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
         {/* Canvas 地图 */}
-        <div className="col-span-9 bg-slate-900 rounded-lg p-4 border border-slate-700/60">
+        <div className="bg-slate-900 rounded-lg p-3 sm:p-4 border border-slate-700/60 xl:col-span-9">
           <canvas
             ref={canvasRef}
             onMouseMove={(e) => setHoveredCell(getCell(e))}
@@ -335,7 +324,7 @@ export default function SimulationPage() {
         </div>
 
         {/* 右侧面板 */}
-        <div className="col-span-3 space-y-4">
+        <div className="space-y-4 xl:col-span-3">
           {/* 状态栏 */}
           <div className="bg-slate-900 rounded-lg p-4 border border-slate-700/60 space-y-2">
             <h3 className="text-sm font-bold text-white mb-2">仿真状态</h3>

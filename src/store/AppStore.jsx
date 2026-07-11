@@ -23,6 +23,7 @@ export function AppStoreProvider({ children }) {
   const [logs, setLogs] = useState([]);
   const [totalConflicts, setTotalConflicts] = useState(0);
   const [resolvedConflicts, setResolvedConflicts] = useState(0);
+  const [simulationRunning, setSimulationRunning] = useState(false);
 
   const addLog = useCallback((message) => {
     setLogs((prev) => [{ time: now(), message }, ...prev].slice(0, 120));
@@ -58,6 +59,7 @@ export function AppStoreProvider({ children }) {
       setRobots(result.robots);
       setPaths(pathResult.paths);
       setConflicts(pathResult.conflicts);
+      setSimulationRunning(result.tasks.some((task) => task.status === '执行中'));
       if (pathResult.conflicts.length > 0) {
         setTotalConflicts((prev) => prev + pathResult.conflicts.length);
         setResolvedConflicts((prev) => prev + pathResult.conflicts.length);
@@ -89,6 +91,7 @@ export function AppStoreProvider({ children }) {
       setRobots(result.robots);
       setPaths(pathResult.paths);
       setConflicts(pathResult.conflicts);
+      setSimulationRunning(result.tasks.some((item) => item.status === '执行中'));
       if (pathResult.conflicts.length > 0) {
         setTotalConflicts((prev) => prev + pathResult.conflicts.length);
         setResolvedConflicts((prev) => prev + pathResult.conflicts.length);
@@ -127,21 +130,113 @@ export function AppStoreProvider({ children }) {
 
     addLog('执行批量优化调度');
     result.logs.forEach((l) => addLog(l));
+    return { ...result, paths: pathResult.paths };
   }, [tasks, robots, mapData, addLog]);
+
+  const startSimulation = useCallback(() => {
+    const result = handleOptimizeSchedule();
+    const hasRunningTasks = result.tasks.some((task) => task.status === '执行中');
+    setSimulationRunning(hasRunningTasks);
+    addLog(hasRunningTasks ? '调度仿真开始运行' : '当前没有可运行的任务');
+  }, [handleOptimizeSchedule, addLog]);
+
+  const pauseSimulation = useCallback(() => {
+    setSimulationRunning(false);
+    addLog('调度仿真已暂停');
+  }, [addLog]);
+
+  const toggleSimulation = useCallback(() => {
+    if (simulationRunning) pauseSimulation();
+    else startSimulation();
+  }, [simulationRunning, pauseSimulation, startSimulation]);
 
   // 机器人操作
   const robotAction = useCallback(
     (robotId, action) => {
+      const robot = robots.find((item) => item.id === robotId);
+      if (!robot) return;
+
+      if (action === 'pause') {
+        const updatedTasks = tasks.map((task) =>
+          task.id === robot.taskId ? { ...task, status: '已暂停' } : { ...task }
+        );
+        const updatedRobots = robots.map((item) =>
+          item.id === robotId ? { ...item, status: 'paused' } : { ...item }
+        );
+        const pathResult = planAllPaths(updatedTasks, updatedRobots, mapData);
+        setTasks(updatedTasks);
+        setRobots(updatedRobots);
+        setPaths(pathResult.paths);
+        setConflicts(pathResult.conflicts);
+        addLog(robot.taskId ? `${robotId} 已暂停，任务 ${robot.taskId} 同步暂停` : `${robotId} 已暂停`);
+        return;
+      }
+
+      if (action === 'start') {
+        if (robot.status === 'paused' && robot.taskId) {
+          const updatedTasks = tasks.map((task) =>
+            task.id === robot.taskId ? { ...task, status: '执行中' } : { ...task }
+          );
+          const updatedRobots = robots.map((item) =>
+            item.id === robotId ? { ...item, status: 'busy' } : { ...item }
+          );
+          const pathResult = planAllPaths(updatedTasks, updatedRobots, mapData);
+          setTasks(updatedTasks);
+          setRobots(updatedRobots);
+          setPaths(pathResult.paths);
+          setConflicts(pathResult.conflicts);
+          setSimulationRunning(true);
+          addLog(`${robotId} 已继续执行任务 ${robot.taskId}`);
+        } else {
+          setRobots((prev) => prev.map((item) =>
+            item.id === robotId
+              ? { ...item, status: 'idle', battery: robot.status === 'charging' ? 100 : item.battery }
+              : item
+          ));
+          addLog(robot.status === 'charging' ? `${robotId} 已完成充电并恢复空闲` : `${robotId} 已启动`);
+        }
+        return;
+      }
+
+      if (action === 'charge') {
+        if (robot.taskId) {
+          const updatedTasks = tasks.map((task) =>
+            task.id === robot.taskId
+              ? { ...task, status: '待派发', robotId: null, matchScore: undefined, matchReasons: undefined }
+              : { ...task }
+          );
+          const updatedRobots = robots.map((item) =>
+            item.id === robotId
+              ? { ...item, status: 'charging', taskId: undefined, pos: [...gridMap.locations['充电站']] }
+              : { ...item }
+          );
+          const result = optimizeSchedule(updatedTasks, updatedRobots, mapData);
+          const pathResult = planAllPaths(result.tasks, result.robots, mapData);
+          setTasks(result.tasks);
+          setRobots(result.robots);
+          setPaths(pathResult.paths);
+          setConflicts(pathResult.conflicts);
+          setSimulationRunning((running) => running && result.tasks.some((task) => task.status === '执行中'));
+          addLog(`${robotId} 已回充，任务 ${robot.taskId} 已重新排队并尝试改派`);
+          result.logs.forEach((message) => addLog(message));
+        } else {
+          setRobots((prev) => prev.map((item) =>
+            item.id === robotId
+              ? { ...item, status: 'charging', pos: [...gridMap.locations['充电站']] }
+              : item
+          ));
+          addLog(`${robotId} 已前往充电站`);
+        }
+        return;
+      }
+
       if (action === 'fault') {
         // 检查机器人是否有正在执行的任务
-        const robot = robots.find((r) => r.id === robotId);
-        if (!robot) return;
-
         if (robot.taskId) {
           // 有任务：重调度
           const updatedTasks = tasks.map((t) => {
             if (t.id === robot.taskId) {
-              return { ...t, status: '待派发', robotId: null };
+              return { ...t, status: '待派发', robotId: null, matchScore: undefined, matchReasons: undefined };
             }
             return { ...t };
           });
@@ -152,10 +247,6 @@ export function AppStoreProvider({ children }) {
             }
             return { ...r };
           });
-
-          // 释放旧路径
-          const newPaths = { ...paths };
-          delete newPaths[robotId];
 
           // 重新调度
           const result = optimizeSchedule(updatedTasks, updatedRobots, mapData);
@@ -193,24 +284,9 @@ export function AppStoreProvider({ children }) {
           })
         );
         addLog(`${robotId} 执行操作：recover`);
-      } else {
-        setRobots((prev) =>
-          prev.map((r) => {
-            if (r.id !== robotId) return r;
-            const updated = { ...r };
-            if (action === 'pause') updated.status = 'paused';
-            else if (action === 'start') updated.status = 'idle';
-            else if (action === 'charge') {
-              updated.status = 'charging';
-              updated.pos = [...gridMap.locations['充电站']];
-            }
-            return updated;
-          })
-        );
-        addLog(`${robotId} 执行操作：${action}`);
       }
     },
-    [robots, tasks, paths, mapData, addLog]
+    [robots, tasks, mapData, addLog]
   );
 
   // 任务操作
@@ -344,58 +420,83 @@ export function AppStoreProvider({ children }) {
     setLogs([]);
     setTotalConflicts(0);
     setResolvedConflicts(0);
+    setSimulationRunning(false);
     addLog('仿真已重置');
   }, [addLog]);
 
-  // 自动任务推进 Ticker
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTasks((prevTasks) => {
-        let updated = false;
-        const nextTasks = prevTasks.map((t) => {
-          if (t.status !== '执行中') return t;
-          const step = Math.floor(Math.random() * 8) + 6;
-          const newProgress = Math.min(100, t.progress + step);
+  const advanceSimulation = useCallback((fixedStep = null) => {
+    setTasks((prevTasks) => {
+      const robotUpdates = new Map();
+      const completedRobotIds = [];
+      let updated = false;
 
-          if (t.robotId) {
-            setPaths((prevPaths) => {
-              const path = prevPaths[t.robotId];
-              if (path && path.length > 0) {
-                const stepIndex = Math.min(path.length - 1, Math.floor((newProgress / 100) * path.length));
-                const nextPos = path[stepIndex];
-                setRobots((prevRobots) =>
-                  prevRobots.map((r) =>
-                    r.id === t.robotId
-                      ? {
-                          ...r,
-                          pos: nextPos,
-                          battery: Math.max(10, r.battery - 0.4),
-                          status: newProgress >= 100 ? 'idle' : 'busy',
-                          taskId: newProgress >= 100 ? undefined : r.taskId,
-                        }
-                      : r
-                  )
-                );
-              }
-              return prevPaths;
-            });
-          }
+      const nextTasks = prevTasks.map((task) => {
+        if (task.status !== '执行中') return task;
+        const step = fixedStep ?? (Math.floor(Math.random() * 8) + 6);
+        const newProgress = Math.min(100, task.progress + step);
+        const path = task.robotId ? paths[task.robotId] : null;
+        const nextPos = path?.length
+          ? path[Math.min(path.length - 1, Math.floor((newProgress / 100) * path.length))]
+          : null;
 
-          updated = true;
-          if (newProgress >= 100) {
-            setTimeout(() => {
-              addLog(`任务已完成并归档：${t.id}`);
-            }, 0);
-            return { ...t, status: '已完成', progress: 100 };
-          }
-          return { ...t, progress: newProgress };
-        });
-        return updated ? nextTasks : prevTasks;
+        if (task.robotId) {
+          robotUpdates.set(task.robotId, { progress: newProgress, pos: nextPos });
+          if (newProgress >= 100) completedRobotIds.push(task.robotId);
+        }
+
+        updated = true;
+        if (newProgress >= 100) {
+          setTimeout(() => addLog(`任务已完成并归档：${task.id}`), 0);
+          return { ...task, status: '已完成', progress: 100 };
+        }
+        return { ...task, progress: newProgress };
       });
-    }, 2000);
 
+      if (!updated) return prevTasks;
+
+      setRobots((prevRobots) => prevRobots.map((robot) => {
+        const update = robotUpdates.get(robot.id);
+        if (!update) return robot;
+        return {
+          ...robot,
+          pos: update.pos || robot.pos,
+          battery: Math.max(10, robot.battery - 0.4),
+          status: update.progress >= 100 ? 'idle' : 'busy',
+          taskId: update.progress >= 100 ? undefined : robot.taskId,
+        };
+      }));
+
+      if (completedRobotIds.length > 0) {
+        setPaths((prevPaths) => {
+          const nextPaths = { ...prevPaths };
+          completedRobotIds.forEach((robotId) => delete nextPaths[robotId]);
+          return nextPaths;
+        });
+      }
+
+      if (!nextTasks.some((task) => task.status === '执行中')) {
+        setTimeout(() => setSimulationRunning(false), 0);
+      }
+      return nextTasks;
+    });
+  }, [paths, addLog]);
+
+  const stepSimulation = useCallback(() => {
+    if (simulationRunning) return;
+    if (!tasks.some((task) => task.status === '执行中')) {
+      addLog('当前没有可单步推进的执行中任务');
+      return;
+    }
+    advanceSimulation(10);
+    addLog('仿真已单步推进 10%');
+  }, [simulationRunning, tasks, advanceSimulation, addLog]);
+
+  // 只有在“运行”状态下才自动推进任务。
+  useEffect(() => {
+    if (!simulationRunning) return undefined;
+    const interval = setInterval(() => advanceSimulation(), 2000);
     return () => clearInterval(interval);
-  }, [addLog]);
+  }, [simulationRunning, advanceSimulation]);
 
   // 获取任务推荐理由
   const getRecommendation = useCallback(
@@ -416,7 +517,9 @@ export function AppStoreProvider({ children }) {
         }
       }
 
-      return bestRobot ? { robot: bestRobot, score: bestScore, reasons: bestReasons } : null;
+      return bestRobot && bestScore > -1000
+        ? { robot: bestRobot, score: bestScore, reasons: bestReasons }
+        : null;
     },
     [robots, mapData]
   );
@@ -429,10 +532,15 @@ export function AppStoreProvider({ children }) {
     logs,
     metrics,
     mapData,
+    simulationRunning,
 
     dispatchTask,
     dispatchExistingTask,
     optimizeSchedule: handleOptimizeSchedule,
+    startSimulation,
+    pauseSimulation,
+    toggleSimulation,
+    stepSimulation,
     rushTask,
     cancelTask,
     progressTask,

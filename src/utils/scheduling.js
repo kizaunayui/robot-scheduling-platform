@@ -18,7 +18,6 @@ function buildAdjList(nodes, edges) {
 
 // Dijkstra 最短路径
 export function findShortestPath(startId, endId) {
-  const nodeMap = new Map(mapNodes.map(n => [n.id, n]));
   const adjList = buildAdjList(mapNodes, mapEdges);
 
   const dist = new Map();
@@ -85,7 +84,6 @@ export function findMultiplePaths(startId, endId) {
     ...e,
     cost: e.cost * (1.2 + Math.random() * 0.3),
   }));
-  const nodeMap = new Map(mapNodes.map(n => [n.id, n]));
   const adjListB = new Map();
   mapNodes.forEach(n => adjListB.set(n.id, []));
   altEdges.forEach(e => {
@@ -207,7 +205,7 @@ export function allocateTask(task, robots) {
 
 // ========== 冲突检测 ==========
 
-export function detectConflicts(robots, tasks) {
+export function detectConflicts(robots) {
   const conflicts = [];
   const runningRobots = robots.filter(r => r.status === 'running' && r.taskId);
 

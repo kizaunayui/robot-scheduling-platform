@@ -34,17 +34,6 @@ function blocked(prev, nxt, t, constraints) {
   return false;
 }
 
-function rebuild(parent, state) {
-  const out = [];
-  let s = state;
-  while (s) {
-    const [pos] = s;
-    out.push(pos);
-    s = parent.get(`${pos[0]},${pos[1]},${s[1]}`);
-  }
-  return out.reverse();
-}
-
 // ========== A* 搜索 ==========
 
 export function astar(start, goal, constraints, startTime, mapData) {

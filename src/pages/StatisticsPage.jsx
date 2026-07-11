@@ -2,12 +2,12 @@ import { useState, useMemo } from 'react'
 import { useAppStore } from '../store/AppStore'
 import { taskTypeNames, taskStatusConfig } from '../data/mapData'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { Download, FileJson, FileSpreadsheet } from 'lucide-react'
+import { FileJson, FileSpreadsheet } from 'lucide-react'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
 
 export default function StatisticsPage() {
-  const { tasks, robots, metrics, logs } = useAppStore()
+  const { tasks, metrics, logs } = useAppStore()
   const [tab, setTab] = useState('charts')
   const [logKeyword, setLogKeyword] = useState('')
   const [logPage, setLogPage] = useState(1)
@@ -20,8 +20,9 @@ export default function StatisticsPage() {
     const completed = tasks.filter(t => t.status === '已完成').length
     const pending = tasks.filter(t => t.status === '待派发').length
     const inProgress = tasks.filter(t => t.status === '执行中').length
+    const paused = tasks.filter(t => t.status === '已暂停').length
     const cancelled = tasks.filter(t => t.status === '已撤销').length
-    return { completed, pending, inProgress, cancelled, total: tasks.length }
+    return { completed, pending, inProgress, paused, cancelled, total: tasks.length }
   }, [tasks])
 
   const typeDistribution = useMemo(() => {
@@ -33,6 +34,7 @@ export default function StatisticsPage() {
   const statusData = [
     { name: '待派发', value: stats.pending },
     { name: '执行中', value: stats.inProgress },
+    { name: '已暂停', value: stats.paused },
     { name: '已完成', value: stats.completed },
     { name: '已撤销', value: stats.cancelled },
   ]
@@ -58,12 +60,7 @@ export default function StatisticsPage() {
   const taskTotalPages = Math.ceil(tasks.length / taskPageSize)
   const pagedTasks = tasks.slice((taskPage - 1) * taskPageSize, taskPage * taskPageSize)
 
-  // 平均响应时间（模拟）
-  const avgResponseTime = useMemo(() => {
-    const completedTasks = tasks.filter(t => t.status === '已完成')
-    if (completedTasks.length === 0) return '--'
-    return `${Math.floor(Math.random() * 3 + 2)} min`
-  }, [tasks])
+  const estimatedMakespan = metrics.makespan > 0 ? `${metrics.makespan} 步` : '--'
 
   // 导出功能
   const handleExportJSON = () => {
@@ -88,7 +85,7 @@ export default function StatisticsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-white">调度统计与日志</h1>
         <div className="flex gap-2">
           <button onClick={handleExportJSON} className="flex items-center gap-1.5 bg-slate-700 text-slate-300 px-3 py-1.5 rounded text-xs hover:bg-slate-600 transition">
@@ -171,7 +168,7 @@ export default function StatisticsPage() {
               <h3 className="text-sm font-bold text-white mb-3">关键调度指标</h3>
               <div className="space-y-3">
                 {[
-                  { label: '平均响应时间', value: avgResponseTime },
+                  { label: '预计最长耗时', value: estimatedMakespan },
                   { label: '总调度成本', value: metrics.sumOfCosts || 0 },
                   { label: '最大完工时间', value: metrics.makespan || 0 },
                   { label: '冲突处理次数', value: `${metrics.conflictsResolved || 0}/${metrics.totalConflicts || 0}` },
