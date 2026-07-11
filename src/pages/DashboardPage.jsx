@@ -1,10 +1,9 @@
 import { useRef, useEffect, useState } from 'react'
 import { useAppStore } from '../store/AppStore'
-import { taskTypeNames, taskTypeColors } from '../data/mapData'
-import { ListChecks, Play, RotateCcw, Clock, Zap } from 'lucide-react'
+import { ListChecks, Pause, Play, RotateCcw, Clock, Zap } from 'lucide-react'
 
 export default function DashboardPage() {
-  const { robots, tasks, logs, metrics, paths, conflicts, mapData, optimizeSchedule, resetSimulation, addLog } = useAppStore()
+  const { robots, tasks, logs, metrics, paths, conflicts, mapData, simulationRunning, toggleSimulation, resetSimulation } = useAppStore()
   const canvasRef = useRef(null)
   const [animTick, setAnimTick] = useState(0)
 
@@ -71,7 +70,7 @@ export default function DashboardPage() {
 
     // 路径
     const pathColors = ['#22c55e', '#3b82f6', '#ef4444', '#f59e0b']
-    Object.entries(paths).forEach(([robotId, path], i) => {
+    Object.values(paths).forEach((path, i) => {
       if (path.length < 2) return
       ctx.strokeStyle = pathColors[i % pathColors.length]
       ctx.lineWidth = 2
@@ -135,11 +134,11 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-white">调度总览</h1>
         <div className="flex gap-2">
-          <button onClick={optimizeSchedule} className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-500 transition">
-            <Play size={14} />运行调度
+          <button onClick={toggleSimulation} className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm text-white transition ${simulationRunning ? 'bg-amber-600 hover:bg-amber-500' : 'bg-blue-600 hover:bg-blue-500'}`}>
+            {simulationRunning ? <Pause size={14} /> : <Play size={14} />}{simulationRunning ? '暂停仿真' : '运行调度'}
           </button>
           <button onClick={resetSimulation} className="flex items-center gap-1.5 bg-slate-700 text-slate-300 px-3 py-1.5 rounded text-sm hover:bg-slate-600 transition">
             <RotateCcw size={14} />重置仿真
@@ -148,7 +147,7 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI 卡片 */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {kpiCards.map(card => {
           const Icon = card.icon
           return (
@@ -165,9 +164,9 @@ export default function DashboardPage() {
         })}
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         {/* 地图预览 */}
-        <div className="col-span-2 bg-slate-900 rounded-lg p-4 border border-slate-700/60">
+        <div className="bg-slate-900 rounded-lg p-3 sm:p-4 border border-slate-700/60 xl:col-span-2">
           <h2 className="text-sm font-bold text-white mb-3">院区调度地图预览</h2>
           <canvas ref={canvasRef} className="w-full rounded border border-slate-700" style={{ aspectRatio: '3/2' }} />
           <div className="flex gap-3 mt-2 text-xs text-slate-500">

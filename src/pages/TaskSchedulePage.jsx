@@ -1,15 +1,16 @@
 import { useState } from 'react'
 import { useAppStore } from '../store/AppStore'
-import { taskTypeNames, taskTypeColors, taskStatusConfig, gridMap } from '../data/mapData'
+import { taskTypeNames, taskStatusConfig, gridMap } from '../data/mapData'
 import { Plus, Send, Zap, X, CheckCircle, ChevronRight } from 'lucide-react'
 
 const priorityColors = { 3: 'text-red-400', 2: 'text-yellow-400', 1: 'text-green-400' }
 const priorityLabels = { 3: '高', 2: '中', 1: '低' }
 
 export default function TaskSchedulePage() {
-  const { tasks, robots, dispatchTask, dispatchExistingTask, rushTask, cancelTask, completeTask, getRecommendation } = useAppStore()
+  const { tasks, dispatchTask, dispatchExistingTask, rushTask, cancelTask, completeTask, getRecommendation } = useAppStore()
   const [filter, setFilter] = useState('ALL')
   const [newTask, setNewTask] = useState({ type: 'medicine', start: '药房', end: '住院区A', weight: 3, priority: 1 })
+  const [formError, setFormError] = useState('')
 
   const locationNames = Object.keys(gridMap.locations)
 
@@ -18,7 +19,16 @@ export default function TaskSchedulePage() {
     .sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id))
 
   const handleCreate = () => {
+    if (newTask.start === newTask.end) {
+      setFormError('起点和终点不能相同，请重新选择。')
+      return
+    }
+    if (Number(newTask.weight) < 1 || Number(newTask.weight) > 30) {
+      setFormError('任务重量需在 1–30 kg 之间。')
+      return
+    }
     dispatchTask(newTask)
+    setFormError('')
     setNewTask({ type: 'medicine', start: '药房', end: '住院区A', weight: 3, priority: 1 })
   }
 
@@ -42,9 +52,9 @@ export default function TaskSchedulePage() {
         <h1 className="text-xl font-bold text-white">任务调度中心</h1>
       </div>
 
-      <div className="grid grid-cols-12 gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
         {/* 左侧：新建任务表单 */}
-        <div className="col-span-4 space-y-4">
+        <div className="space-y-4 xl:col-span-4">
           <div className="bg-slate-900 rounded-lg p-4 border border-slate-700/60">
             <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
               <Plus size={16} className="text-blue-400" />新建任务
@@ -84,6 +94,7 @@ export default function TaskSchedulePage() {
                   </select>
                 </div>
               </div>
+              {formError && <p role="alert" className="rounded border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{formError}</p>}
               <button onClick={handleCreate} className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-500 transition font-medium">
                 <Send size={14} />创建并派发
               </button>
@@ -94,7 +105,7 @@ export default function TaskSchedulePage() {
           <div className="bg-slate-900 rounded-lg p-4 border border-slate-700/60">
             <h3 className="text-xs font-bold text-slate-400 mb-3">状态筛选</h3>
             <div className="flex flex-wrap gap-2">
-              {['ALL', '待派发', '加急', '执行中', '已完成', '已撤销'].map(f => (
+              {['ALL', '待派发', '加急', '执行中', '已暂停', '已完成', '已撤销'].map(f => (
                 <button key={f} onClick={() => setFilter(f)} className={`px-2.5 py-1 rounded text-xs transition ${filter === f ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
                   {f === 'ALL' ? '全部' : f}
                 </button>
@@ -104,7 +115,7 @@ export default function TaskSchedulePage() {
         </div>
 
         {/* 右侧：任务列表 */}
-        <div className="col-span-8 space-y-3">
+        <div className="space-y-3 xl:col-span-8">
           {filtered.length === 0 && (
             <div className="bg-slate-900 rounded-lg p-8 border border-slate-700/60 text-center text-slate-500">暂无任务</div>
           )}
@@ -113,7 +124,7 @@ export default function TaskSchedulePage() {
             const rec = getTaskRecommendation(task)
             return (
               <div key={task.id} className="bg-slate-900 rounded-lg p-4 border border-slate-700/60 hover:border-slate-600 transition">
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1.5">
                       <span className="text-white font-bold text-sm">{task.id}</span>
@@ -138,9 +149,14 @@ export default function TaskSchedulePage() {
                         <span className="text-slate-500">({rec.reasons.join('、')})</span>
                       </div>
                     )}
+                    {!rec && (task.status === '待派发' || task.status === '加急') && (
+                      <div className="mt-2 rounded border border-amber-500/25 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-300">
+                        当前无匹配的空闲机器人，任务将保留在队列中。
+                      </div>
+                    )}
 
                     {/* 进度条 */}
-                    {(task.status === '执行中') && (
+                    {(task.status === '执行中' || task.status === '已暂停') && (
                       <div className="mt-2 flex items-center gap-2">
                         <div className="flex-1 bg-slate-700 rounded-full h-1.5 max-w-xs">
                           <div className="bg-blue-500 h-1.5 rounded-full transition-all" style={{ width: `${task.progress}%` }} />
@@ -151,10 +167,10 @@ export default function TaskSchedulePage() {
                   </div>
 
                   {/* 操作按钮 */}
-                  <div className="flex gap-1.5 shrink-0">
+                  <div className="flex shrink-0 flex-wrap gap-1.5">
                     {(task.status === '待派发' || task.status === '加急') && (
-                      <button onClick={() => dispatchExistingTask(task.id)} className="flex items-center gap-1 bg-blue-600 text-white px-2.5 py-1 rounded text-xs hover:bg-blue-500 transition">
-                        <Send size={12} />派发
+                      <button onClick={() => dispatchExistingTask(task.id)} disabled={!rec} className="flex items-center gap-1 bg-blue-600 text-white px-2.5 py-1 rounded text-xs hover:bg-blue-500 transition disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500">
+                        <Send size={12} />{rec ? '派发' : '暂无可用'}
                       </button>
                     )}
                     {task.status !== '已完成' && task.status !== '已撤销' && (
@@ -167,7 +183,7 @@ export default function TaskSchedulePage() {
                         <CheckCircle size={12} />完成
                       </button>
                     )}
-                    {(task.status === '待派发' || task.status === '加急' || task.status === '执行中') && (
+                    {(task.status === '待派发' || task.status === '加急' || task.status === '执行中' || task.status === '已暂停') && (
                       <button onClick={() => cancelTask(task.id)} className="flex items-center gap-1 bg-slate-700 text-slate-300 px-2.5 py-1 rounded text-xs hover:bg-slate-600 transition">
                         <X size={12} />撤销
                       </button>

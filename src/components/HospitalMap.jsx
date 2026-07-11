@@ -1,7 +1,7 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { mapNodes, mapEdges, mapAreas, nodeTypeColors, nodeTypeNames, robotTypeColors, robotStatusNames } from '../data/mapData';
 
-export default function HospitalMap({ floor, robots = [], selectedRoute = null, onNodeClick, onRobotClick, tasks = [] }) {
+export default function HospitalMap({ floor, robots = [], selectedRoute = null, onNodeClick, onRobotClick }) {
   const canvasRef = useRef(null);
   const animRef = useRef(null);
   const [hoveredNode, setHoveredNode] = useState(null);
@@ -12,7 +12,7 @@ export default function HospitalMap({ floor, robots = [], selectedRoute = null, 
   const floorEdges = mapEdges.filter(e => e.floor === floor);
   const floorAreas = mapAreas.filter(a => a.floor === floor);
   const floorRobots = robots.filter(r => r.floor === floor);
-  const nodeMap = new Map(mapNodes.map(n => [n.id, n]));
+  const nodeMap = useMemo(() => new Map(mapNodes.map(n => [n.id, n])), []);
 
   // 动画
   useEffect(() => {
