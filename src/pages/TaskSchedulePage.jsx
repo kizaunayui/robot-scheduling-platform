@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { useAppStore } from '../store/AppStore'
-import { taskTypeNames, taskStatusConfig, gridMap } from '../data/mapData'
+import { taskTypeNames, taskStatusConfig, gridMap, maxRobotCapacity } from '../data/mapData'
 import { Plus, Send, Zap, X, CheckCircle, ChevronRight } from 'lucide-react'
 
 const priorityColors = { 3: 'text-red-400', 2: 'text-yellow-400', 1: 'text-green-400' }
 const priorityLabels = { 3: '高', 2: '中', 1: '低' }
 
 export default function TaskSchedulePage() {
-  const { tasks, dispatchTask, dispatchExistingTask, rushTask, cancelTask, completeTask, getRecommendation } = useAppStore()
+  const { tasks, robots, dispatchTask, dispatchExistingTask, rushTask, cancelTask, completeTask, getRecommendation } = useAppStore()
   const [filter, setFilter] = useState('ALL')
   const [newTask, setNewTask] = useState({ type: 'medicine', start: '药房', end: '住院区A', weight: 3, priority: 1 })
   const [formError, setFormError] = useState('')
@@ -23,8 +23,8 @@ export default function TaskSchedulePage() {
       setFormError('起点和终点不能相同，请重新选择。')
       return
     }
-    if (Number(newTask.weight) < 1 || Number(newTask.weight) > 30) {
-      setFormError('任务重量需在 1–30 kg 之间。')
+    if (Number(newTask.weight) < 1 || Number(newTask.weight) > maxRobotCapacity) {
+      setFormError(`任务重量需在 1–${maxRobotCapacity} kg 之间（机器人最大载重 ${maxRobotCapacity} kg）。`)
       return
     }
     dispatchTask(newTask)
@@ -38,13 +38,15 @@ export default function TaskSchedulePage() {
     return getRecommendation(task)
   }
 
-  const taskTypes = [
-    { key: 'medicine', label: '药品配送' },
-    { key: 'specimen', label: '标本送检' },
-    { key: 'instrument', label: '器械回收' },
-    { key: 'linen', label: '被服运输' },
-    { key: 'meal', label: '大件转运' },
-  ]
+  // 区分“没有机器人具备能力/载重”与“有能力的机器人暂时都在忙”
+  const getUnavailableReason = (task) => {
+    const capable = robots.some(r => r.status !== 'error' && r.skills.includes(task.type) && task.weight <= r.capacity)
+    return capable
+      ? '当前无匹配的空闲机器人，任务将保留在队列中，机器人空闲后自动补派。'
+      : '没有机器人具备该任务所需的能力或载重，请调整任务类型或重量。'
+  }
+
+  const taskTypes = Object.entries(taskTypeNames).map(([key, label]) => ({ key, label }))
 
   return (
     <div className="space-y-5">
@@ -83,7 +85,7 @@ export default function TaskSchedulePage() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-slate-400 mb-1 block">重量 (kg)</label>
-                  <input type="number" min="1" max="30" value={newTask.weight} onChange={e => setNewTask(p => ({ ...p, weight: e.target.value }))} className="w-full bg-slate-800 text-white text-sm px-3 py-2 rounded border border-slate-600 focus:border-blue-500 focus:outline-none" />
+                  <input type="number" min="1" max={maxRobotCapacity} value={newTask.weight} onChange={e => setNewTask(p => ({ ...p, weight: e.target.value }))} className="w-full bg-slate-800 text-white text-sm px-3 py-2 rounded border border-slate-600 focus:border-blue-500 focus:outline-none" />
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 mb-1 block">优先级</label>
@@ -137,7 +139,7 @@ export default function TaskSchedulePage() {
                       <span>{task.start} → {task.end}</span>
                       <span>{task.weight}kg</span>
                       {task.robotId && <span className="text-blue-400">分配: {task.robotId}</span>}
-                      {task.matchScore && <span className="text-slate-400">评分: {task.matchScore}</span>}
+                      {task.matchScore != null && <span className="text-slate-400">评分: {task.matchScore}</span>}
                     </div>
 
                     {/* 推荐信息 */}
@@ -151,7 +153,7 @@ export default function TaskSchedulePage() {
                     )}
                     {!rec && (task.status === '待派发' || task.status === '加急') && (
                       <div className="mt-2 rounded border border-amber-500/25 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-300">
-                        当前无匹配的空闲机器人，任务将保留在队列中。
+                        {getUnavailableReason(task)}
                       </div>
                     )}
 

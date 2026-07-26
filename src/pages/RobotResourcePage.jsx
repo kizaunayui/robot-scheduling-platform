@@ -28,7 +28,7 @@ export default function RobotResourcePage() {
       <h1 className="text-xl font-bold text-white">机器人资源管理</h1>
 
       {/* 状态统计 */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {[
           { label: '空闲', count: statusCounts.idle, color: 'bg-emerald-600' },
           { label: '执行中', count: statusCounts.busy, color: 'bg-blue-600' },
@@ -44,7 +44,7 @@ export default function RobotResourcePage() {
       </div>
 
       {/* 机器人卡片网格 */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {robots.map(robot => {
           const si = statusInfo[robot.status] || statusInfo.idle
           const currentTask = robot.taskId ? tasks.find(t => t.id === robot.taskId) : null

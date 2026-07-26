@@ -75,7 +75,8 @@ export default function StatisticsPage() {
   const handleExportCSV = () => {
     const headers = ['时间', '操作内容']
     const rows = filteredLogs.map(l => [l.time, l.message])
-    const csv = [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n')
+    const escapeCell = (c) => `"${String(c).replace(/"/g, '""')}"`
+    const csv = [headers.join(','), ...rows.map(r => r.map(escapeCell).join(','))].join('\n')
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -98,7 +99,7 @@ export default function StatisticsPage() {
       </div>
 
       {/* 核心指标 */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {[
           { label: '总任务', value: stats.total, color: 'text-blue-400' },
           { label: '执行中', value: stats.inProgress, color: 'text-indigo-400' },
@@ -125,7 +126,7 @@ export default function StatisticsPage() {
       {/* 图表分析 */}
       {tab === 'charts' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="bg-slate-900 rounded-lg p-4 border border-slate-700/60">
               <h3 className="text-sm font-bold text-white mb-3">任务类型分布</h3>
               <ResponsiveContainer width="100%" height={250}>
@@ -151,7 +152,7 @@ export default function StatisticsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="bg-slate-900 rounded-lg p-4 border border-slate-700/60">
               <h3 className="text-sm font-bold text-white mb-3">机器人工作量排行</h3>
               <ResponsiveContainer width="100%" height={200}>
@@ -214,7 +215,7 @@ export default function StatisticsPage() {
                     <td className="p-3 text-slate-300 text-xs">{t.priority === 3 ? '高' : t.priority === 2 ? '中' : '低'}</td>
                     <td className="p-3"><span className={`px-1.5 py-0.5 rounded text-xs text-white ${sc.color}`}>{sc.label}</span></td>
                     <td className="p-3 text-slate-400 text-xs">{t.robotId || '-'}</td>
-                    <td className="p-3 text-slate-500 text-xs">{t.matchScore || '-'}</td>
+                    <td className="p-3 text-slate-500 text-xs">{t.matchScore != null ? t.matchScore : '-'}</td>
                     <td className="p-3">
                       <div className="w-16 bg-slate-700 rounded-full h-1.5">
                         <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${t.progress}%` }} />

@@ -21,7 +21,7 @@ export default function SimulationPage() {
     agents: `${c.a} ↔ ${c.b}`,
     strategy: c.type === 'vertex' ? '等待-重规划' : '路径绕行',
   }))
-  const hasRunningTasks = tasks.some(task => task.status === '执行中')
+  const hasActiveWork = tasks.some(task => task.status === '执行中') || robots.some(r => r.status === 'charging')
 
   const handleReset = () => {
     resetSimulation()
@@ -285,7 +285,7 @@ export default function SimulationPage() {
           <button onClick={toggleSimulation} className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm text-white transition ${simulationRunning ? 'bg-amber-600 hover:bg-amber-500' : 'bg-blue-600 hover:bg-blue-500'}`}>
             {simulationRunning ? <Pause size={14} /> : <Play size={14} />}{simulationRunning ? '暂停仿真' : '运行调度'}
           </button>
-          <button onClick={stepSimulation} disabled={simulationRunning || !hasRunningTasks} title={!hasRunningTasks ? '请先运行调度生成执行中任务' : undefined} className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-1.5 rounded text-sm hover:bg-indigo-500 transition disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500">
+          <button onClick={stepSimulation} disabled={simulationRunning || !hasActiveWork} title={!hasActiveWork ? '请先运行调度生成执行中任务' : undefined} className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-1.5 rounded text-sm hover:bg-indigo-500 transition disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500">
             <SkipForward size={14} />推进一步
           </button>
           <button onClick={handleReset} className="flex items-center gap-1.5 bg-slate-700 text-slate-300 px-3 py-1.5 rounded text-sm hover:bg-slate-600 transition">

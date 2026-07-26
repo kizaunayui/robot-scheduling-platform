@@ -46,7 +46,13 @@ export function astar(start, goal, constraints, startTime, mapData) {
   const startKey = `${start[0]},${start[1]},${startTime}`;
   best.set(startKey, 0);
 
+  // 状态空间含时间维且允许原地等待，目标不可达时 openSet 永远不会耗尽；
+  // 以扩展次数上限保证终止（上限远大于任何可行路径所需的扩展量）
+  let expansions = 0;
+  const maxExpansions = cols * rows * 32;
+
   while (openSet.length > 0) {
+    if (++expansions > maxExpansions) return [];
     openSet.sort((a, b) => a[0] - b[0]);
     const [, g, t, pos, prevState] = openSet.shift();
     const stateKey = `${pos[0]},${pos[1]},${t}`;
@@ -152,16 +158,18 @@ export function cbs(agents, mapData) {
     paths[a.id] = route(a, constraints[a.id], mapData);
   });
 
-  const heap = [[sumCosts(paths), 0, paths, constraints]];
-  const conflicts = [];
+  // 每个搜索节点携带自己这条分支上已消解的冲突链（history），
+  // 返回时只报告被采纳方案实际消解的冲突，而非搜索中所有分支遇到的冲突
+  const heap = [[sumCosts(paths), 0, paths, constraints, []]];
+  let expanded = 0;
   let seq = 1;
 
-  while (heap.length > 0 && conflicts.length < 60) {
+  while (heap.length > 0 && expanded < 60) {
     heap.sort((a, b) => a[0] - b[0]);
-    const [, , curPaths, curConstraints] = heap.shift();
+    const [, , curPaths, curConstraints, curHistory] = heap.shift();
     const conflict = firstConflict(curPaths);
-    if (!conflict) return { paths: curPaths, conflicts };
-    conflicts.push(conflict);
+    if (!conflict) return { paths: curPaths, conflicts: curHistory };
+    expanded++;
 
     for (const agentId of [conflict.a, conflict.b]) {
       const newConstraints = JSON.parse(JSON.stringify(curConstraints));
@@ -171,11 +179,18 @@ export function cbs(agents, mapData) {
       const newPath = route(agent, newConstraints[agentId], mapData);
       if (newPath.length > 0) {
         newPaths[agentId] = newPath;
-        heap.push([sumCosts(newPaths), seq++, newPaths, newConstraints]);
+        heap.push([sumCosts(newPaths), seq++, newPaths, newConstraints, [...curHistory, conflict]]);
       }
     }
   }
-  return { paths, conflicts };
+
+  // 搜索预算耗尽：返回代价最低的候选方案（可能仍残留冲突）
+  if (heap.length > 0) {
+    heap.sort((a, b) => a[0] - b[0]);
+    const [, , bestPaths, , bestHistory] = heap[0];
+    return { paths: bestPaths, conflicts: bestHistory };
+  }
+  return { paths, conflicts: [] };
 }
 
 function sumCosts(paths) {
@@ -224,10 +239,11 @@ export function typeName(taskType) {
 
 // ========== 调度优化 ==========
 
-export function optimizeSchedule(tasks, robots, mapData) {
+// onlyTaskId 传入时只派发该任务（单任务派发/加急改派），否则批量派发所有待派发任务
+export function optimizeSchedule(tasks, robots, mapData, onlyTaskId = null) {
   const available = {};
   robots.forEach((r) => {
-    if (r.status === 'idle' || r.status === '空闲') available[r.id] = r;
+    if (r.status === 'idle') available[r.id] = r;
   });
 
   const sortedTasks = [...tasks].sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id));
@@ -235,6 +251,7 @@ export function optimizeSchedule(tasks, robots, mapData) {
 
   for (const task of sortedTasks) {
     if (task.status !== '待派发' && task.status !== '加急') continue;
+    if (onlyTaskId && task.id !== onlyTaskId) continue;
 
     let bestScore = -Infinity;
     let bestRobot = null;
@@ -298,9 +315,8 @@ export function calculateMetrics(tasks, robots, paths) {
     totalTasks: tasks.length,
     runningTasks: running.length,
     completedTasks: completed.length,
-    onlineRobots: robots.filter((r) => r.status !== 'fault').length,
+    onlineRobots: robots.filter((r) => r.status !== 'error').length,
     utilization: Math.round((running.length / Math.max(robots.length, 1)) * 100) / 100,
-    conflictsResolved: 0,
     sumOfCosts: pathValues.reduce((s, p) => s + Math.max(0, p.length - 1), 0),
     makespan: Math.max(...pathValues.map((p) => Math.max(0, p.length - 1)), 0),
   };
